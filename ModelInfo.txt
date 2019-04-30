@@ -1,0 +1,228 @@
+(Seq2Seq(                                                                                                                                                                                                [200/1907]
+  (encoder_embed): Embedding(93, 300)
+  (encoder_rnn): LSTM(300, 256, num_layers=2, batch_first=True)
+  (decoder_embed): Embedding(44, 300)
+  (decoder_rnn): LSTM(556, 256, num_layers=2, batch_first=True)
+  (decoder_linear): Linear(in_features=256, out_features=44)
+), ModuleNet(
+  (stem): Sequential(
+    (0): Conv2d (1024, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): ReLU(inplace)
+    (2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (3): ReLU(inplace)
+  )
+  (classifier): Sequential(
+    (0): Conv2d (128, 512, kernel_size=(1, 1), stride=(1, 1))
+    (1): ReLU(inplace)
+    (2): MaxPool2d(kernel_size=(2, 2), stride=(2, 2), dilation=(1, 1))
+    (3): Flatten(
+    )
+    (4): Linear(in_features=25088, out_features=1024)
+    (5): ReLU(inplace)
+    (6): Linear(in_features=1024, out_features=32)
+  )
+  (<NULL>): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (equal_color): ConcatBlock(
+    (proj): Conv2d (256, 128, kernel_size=(1, 1), stride=(1, 1))
+    (res_block): ResidualBlock(
+      (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+  (query_color): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (query_size): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (equal_size): ConcatBlock(
+    (proj): Conv2d (256, 128, kernel_size=(1, 1), stride=(1, 1))
+    (res_block): ResidualBlock(
+      (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+  (equal_material): ConcatBlock(                                                                                                                                                                         [151/1907]
+    (proj): Conv2d (256, 128, kernel_size=(1, 1), stride=(1, 1))
+    (res_block): ResidualBlock(
+      (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+  (same_size): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (<START>): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_material[rubber]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_color[gray]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (exist): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_color[red]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (intersect): ConcatBlock(
+    (proj): Conv2d (256, 128, kernel_size=(1, 1), stride=(1, 1))
+    (res_block): ResidualBlock(
+      (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+  (unique): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (relate[left]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (scene): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_shape[cylinder]): ResidualBlock(                                                                                                                                                               [101/1907]
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_shape[cube]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (union): ConcatBlock(
+    (proj): Conv2d (256, 128, kernel_size=(1, 1), stride=(1, 1))
+    (res_block): ResidualBlock(
+      (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+  (relate[behind]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (less_than): ConcatBlock(
+    (proj): Conv2d (256, 128, kernel_size=(1, 1), stride=(1, 1))
+    (res_block): ResidualBlock(
+      (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+  (count): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (relate[front]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_color[cyan]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (greater_than): ConcatBlock(
+    (proj): Conv2d (256, 128, kernel_size=(1, 1), stride=(1, 1))
+    (res_block): ResidualBlock(
+      (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+  (filter_color[brown]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_color[yellow]): ResidualBlock(                                                                                                                                                                  [52/1907]
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (<UNK>): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (<END>): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (query_shape): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_size[small]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_material[metal]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_color[purple]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_size[large]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (equal_integer): ConcatBlock(
+    (proj): Conv2d (256, 128, kernel_size=(1, 1), stride=(1, 1))
+    (res_block): ResidualBlock(
+      (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+  (same_material): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (same_shape): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (relate[right]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (query_material): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_color[blue]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_shape[sphere]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (filter_color[green]): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+  (equal_shape): ConcatBlock(
+    (proj): Conv2d (256, 128, kernel_size=(1, 1), stride=(1, 1))
+    (res_block): ResidualBlock(
+      (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+  (same_color): ResidualBlock(
+    (conv1): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv2): Conv2d (128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+))
+
