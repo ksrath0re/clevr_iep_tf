@@ -62,7 +62,7 @@ class LstmEncoder():
     self.embed = tf.get_variable("embed", [len(token_to_idx), wordvec_dim])
     self.embed = nn.Embedding(len(token_to_idx), wordvec_dim)
     self.rnn = nn.LSTM(wordvec_dim, rnn_dim, rnn_num_layers,
-                       dropout=rnn_dropout, batch_first=True)
+                       dropout=rnn_dropout, batch_first=True) #CHANGE
 
   def expand_vocab(self, token_to_idx, word2vec=None, std=0.01):
     expand_embedding_vocab(self.embed, token_to_idx,
@@ -70,7 +70,7 @@ class LstmEncoder():
 
   def forward(self, x):
     N, T = x.size()
-    idx = torch.LongTensor(N).fill_(T - 1)
+    idx = tf.Tensor(N).fill_(T - 1)
 
     # Find the last non-null element in each sequence
     x_cpu = x.data.cpu()
@@ -80,12 +80,12 @@ class LstmEncoder():
           idx[i] = t
           break
     idx = idx.type_as(x.data).long()
-    idx = Variable(idx, requires_grad=False)
+    idx = tf.Variable(idx)
 
     hs, _ = self.rnn(self.embed(x))
-    idx = idx.view(N, 1, 1).expand(N, 1, hs.size(2))
+    idx = idx.reshape(N, 1, 1).expand(N, 1, hs.size(2))
     H = hs.size(2)
-    return hs.gather(1, idx).view(N, H)
+    return hs.gather(1, idx).reshape(N, H)
 
 
 def build_cnn(feat_dim=(1024, 14, 14),
@@ -96,17 +96,17 @@ def build_cnn(feat_dim=(1024, 14, 14),
   C, H, W = feat_dim
   layers = []
   if num_res_blocks > 0:
-    layers.append(nn.Conv2d(C, res_block_dim, kernel_size=3, padding=1))
-    layers.append(nn.ReLU(inplace=True))
+    layers.append(tf.keras.layers.Conv2d(C, res_block_dim, kernel_size=(3, 3), padding=1))
+    layers.append(nn.ReLU())
     C = res_block_dim
     for _ in range(num_res_blocks):
       layers.append(ResidualBlock(C))
   if proj_dim > 0:
-    layers.append(nn.Conv2d(C, proj_dim, kernel_size=1, padding=0))
-    layers.append(nn.ReLU(inplace=True))
+    layers.append(tf.keras.layers.Conv2d(C, proj_dim, kernel_size=(1, 1), padding=0))
+    layers.append(nn.ReLU())
     C = proj_dim
   if pooling == 'maxpool2':
-    layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+    layers.append(tf.keras.layers.MaxPool2d(kernel_size=(2, 2), stride=2))
     H, W = H // 2, W // 2
   return nn.Sequential(*layers), (C, H, W)
 
@@ -118,24 +118,24 @@ def build_mlp(input_dim, hidden_dims, output_dim,
   if dropout > 0:
     layers.append(nn.Dropout(p=dropout))
   if use_batchnorm:
-    layers.append(nn.BatchNorm1d(input_dim))
+    layers.append(tf.keras.layers.batch_normalization(input_dim))
   for dim in hidden_dims:
-    layers.append(nn.Linear(D, dim))
+    layers.append(nn.Linear(D, dim)) #CHANGE
     if use_batchnorm:
-      layers.append(nn.BatchNorm1d(dim))
+      layers.append(tf.keras.layers.batch_normalization(dim))
     if dropout > 0:
       layers.append(nn.Dropout(p=dropout))
-    layers.append(nn.ReLU(inplace=True))
+    layers.append(tf.keras.layers.batch_normalization.ReLU())
     D = dim
-  layers.append(nn.Linear(D, output_dim))
-  return nn.Sequential(*layers)
+  layers.append(nn.Linear(D, output_dim))#CHANGE
+  return tf.keras.layers.Sequential(layers)
 
 
-class LstmModel(nn.Module):
+class LstmModel():
   def __init__(self, vocab,
                rnn_wordvec_dim=300, rnn_dim=256, rnn_num_layers=2, rnn_dropout=0,
                fc_use_batchnorm=False, fc_dropout=0, fc_dims=(1024,)):
-    super(LstmModel, self).__init__()
+
     rnn_kwargs = {
       'token_to_idx': vocab['question_token_to_idx'],
       'wordvec_dim': rnn_wordvec_dim,
@@ -160,14 +160,14 @@ class LstmModel(nn.Module):
     return scores
 
 
-class CnnLstmModel(nn.Module):
+class CnnLstmModel():
   def __init__(self, vocab,
                rnn_wordvec_dim=300, rnn_dim=256, rnn_num_layers=2, rnn_dropout=0,
                cnn_feat_dim=(1024,14,14),
                cnn_res_block_dim=128, cnn_num_res_blocks=0,
                cnn_proj_dim=512, cnn_pooling='maxpool2',
                fc_dims=(1024,), fc_use_batchnorm=False, fc_dropout=0):
-    super(CnnLstmModel, self).__init__()
+
     rnn_kwargs = {
       'token_to_idx': vocab['question_token_to_idx'],
       'wordvec_dim': rnn_wordvec_dim,
@@ -200,7 +200,7 @@ class CnnLstmModel(nn.Module):
     assert N == feats.size(0)
     q_feats = self.rnn(questions)
     img_feats = self.cnn(feats)
-    cat_feats = torch.cat([q_feats, img_feats.view(N, -1)], 1)
+    cat_feats = tf.concat([q_feats, img_feats.reshape(N, -1)], 1)
     scores = self.classifier(cat_feats)
     return scores
 
@@ -211,7 +211,7 @@ class CnnLstmSaModel(nn.Module):
                cnn_feat_dim=(1024,14,14),
                stacked_attn_dim=512, num_stacked_attn=2,
                fc_use_batchnorm=False, fc_dropout=0, fc_dims=(1024,)):
-    super(CnnLstmSaModel, self).__init__()
+
     rnn_kwargs = {
       'token_to_idx': vocab['question_token_to_idx'],
       'wordvec_dim': rnn_wordvec_dim,
@@ -222,7 +222,7 @@ class CnnLstmSaModel(nn.Module):
     self.rnn = LstmEncoder(**rnn_kwargs)
 
     C, H, W = cnn_feat_dim
-    self.image_proj = nn.Conv2d(C, rnn_dim, kernel_size=1, padding=0)
+    self.image_proj = nn.Conv2d(C, rnn_dim, kernel_size=(1, 1), padding=0)
     self.stacked_attns = []
     for i in range(num_stacked_attn):
       sa = StackedAttention(rnn_dim, stacked_attn_dim)
