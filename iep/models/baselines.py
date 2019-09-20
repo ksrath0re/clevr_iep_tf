@@ -87,7 +87,6 @@ class LstmEncoder(tf.keras.Model):
         H = hs.size(2)
         return hs.gather(1, idx).reshape(N, H)
 
-
 def build_cnn(feat_dim=(1024, 14, 14),
               res_block_dim=128,
               num_res_blocks=0,
@@ -109,7 +108,6 @@ def build_cnn(feat_dim=(1024, 14, 14),
         layers.append(tf.keras.layers.MaxPool2d(kernel_size=(2, 2), stride=2))
         H, W = H // 2, W // 2
     return nn.Sequential(*layers), (C, H, W)
-
 
 def build_mlp(input_dim, hidden_dims, output_dim,
               use_batchnorm=False, dropout=0):
@@ -245,3 +243,4 @@ class CnnLstmSaModel(tf.keras.Model):
 
         scores = self.classifier(u)
         return scores
+
