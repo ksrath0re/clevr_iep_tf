@@ -13,10 +13,12 @@
 # from torch.autograd import Variable
 
 import tensorflow as tf
+import tensorflow.nn as nn
 
 from iep.embedding import expand_embedding_vocab
 
-class Seq2Seq():
+
+class Seq2Seq(tf.Module):
     def __init__(self,
                  encoder_vocab_size=100,
                  decoder_vocab_size=100,
@@ -31,10 +33,10 @@ class Seq2Seq():
                  ):
 
         self.encoder_embed = tf.get_variable("encoder_embed", [encoder_vocab_size, wordvec_dim])
-        #self.encoder_embed = nn.Embedding(encoder_vocab_size, wordvec_dim)
+        # self.encoder_embed = nn.Embedding(encoder_vocab_size, wordvec_dim)
         self.encoder_rnn = nn.LSTM(wordvec_dim, hidden_dim, rnn_num_layers,
                                    dropout=rnn_dropout, batch_first=True)
-        #self.decoder_embed = nn.Embedding(decoder_vocab_size, wordvec_dim)
+        # self.decoder_embed = nn.Embedding(decoder_vocab_size, wordvec_dim)
         self.decoder_embed = tf.get_variable("decoder_embed", [decoder_vocab_size, wordvec_dim])
         self.decoder_rnn = nn.LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
                                    dropout=rnn_dropout, batch_first=True)
@@ -135,7 +137,7 @@ class Seq2Seq():
         out_mask[:, :-1] = mask[:, 1:]
         out_mask = out_mask.view(N, T_out, 1).expand(N, T_out, V_out)
         out_masked = output_logprobs[out_mask].reshape(-1, V_out)
-        loss = tf.sigmoid_cross_entropy_with_logits(out_masked, y_masked)#CHANGE
+        loss = tf.sigmoid_cross_entropy_with_logits(out_masked, y_masked)  # CHANGE
         return loss
 
     def forward(self, x, y):
@@ -212,7 +214,7 @@ class Seq2Seq():
         for sampled_output in self.multinomial_outputs:
             sampled_output.reinforce(reward)
             grad_output.append(None)
-        #torch.autograd.backward(self.multinomial_outputs, grad_output, retain_variables=True) #CHANGE
+        # torch.autograd.backward(self.multinomial_outputs, grad_output, retain_variables=True) #CHANGE
 
 
 def logical_and(x, y):

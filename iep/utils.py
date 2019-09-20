@@ -52,7 +52,7 @@ def load_program_generator(path):
 
 
 def load_execution_engine(path, verbose=True):
-    checkpoint = load_cpu(path)
+    checkpoint = load_cpu(path) #TODO change load_cpu
     kwargs = checkpoint['execution_engine_kwargs']
     state = checkpoint['execution_engine_state']
     kwargs['verbose'] = verbose

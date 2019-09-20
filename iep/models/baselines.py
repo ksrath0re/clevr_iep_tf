@@ -1,5 +1,4 @@
-import tensorflow as tf
-import tensorflow.nn
+
 
 #!/usr/bin/env python3
 
@@ -18,16 +17,16 @@ from iep.models.layers import ResidualBlock
 from iep.embedding import expand_embedding_vocab
 
 
-class StackedAttention():
+class StackedAttention(tf.keras.Model):
     def __init__(self, input_dim, hidden_dim):
         super(StackedAttention, self).__init__()
-        self.Wv = nn.Conv2d(input_dim, hidden_dim, kernel_size=(1, 1), padding=0)
+        self.Wv = tf.keras.layers.Conv2d(input_dim, hidden_dim, kernel_size=(1, 1), padding=0)
         self.Wu = nn.Linear(input_dim, hidden_dim)
         self.Wp = nn.Conv2d(hidden_dim, 1, kernel_size=(1, 1), padding=0)
         self.hidden_dim = hidden_dim
         self.attention_maps = None
 
-    def forward(self, v, u):
+    def call(self, v, u):
         """
         Input:
         - v: N x D x H x W
@@ -87,7 +86,6 @@ class LstmEncoder(tf.keras.Model):
         H = hs.size(2)
         return hs.gather(1, idx).reshape(N, H)
 
-
 def build_cnn(feat_dim=(1024, 14, 14),
               res_block_dim=128,
               num_res_blocks=0,
@@ -109,7 +107,6 @@ def build_cnn(feat_dim=(1024, 14, 14),
         layers.append(tf.keras.layers.MaxPool2d(kernel_size=(2, 2), stride=2))
         H, W = H // 2, W // 2
     return nn.Sequential(*layers), (C, H, W)
-
 
 def build_mlp(input_dim, hidden_dims, output_dim,
               use_batchnorm=False, dropout=0):
@@ -245,3 +242,4 @@ class CnnLstmSaModel(tf.keras.Model):
 
         scores = self.classifier(u)
         return scores
+
