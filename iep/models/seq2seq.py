@@ -32,15 +32,13 @@ class Seq2Seq(tf.Module):
                  encoder_embed=None
                  ):
 
-        self.encoder_embed = tf.get_variable("encoder_embed", [encoder_vocab_size, wordvec_dim])
-        # self.encoder_embed = nn.Embedding(encoder_vocab_size, wordvec_dim)
-        self.encoder_rnn = nn.LSTM(wordvec_dim, hidden_dim, rnn_num_layers,
-                                   dropout=rnn_dropout, batch_first=True)
-        # self.decoder_embed = nn.Embedding(decoder_vocab_size, wordvec_dim)
-        self.decoder_embed = tf.get_variable("decoder_embed", [decoder_vocab_size, wordvec_dim])
-        self.decoder_rnn = nn.LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
-                                   dropout=rnn_dropout, batch_first=True)
-        self.decoder_linear = nn.Linear(hidden_dim, decoder_vocab_size)
+        self.encoder_embed = tf.keras.layers.Embedding(encoder_vocab_size, wordvec_dim)
+        self.encoder_rnn = tf.keras.layers.LSTM(wordvec_dim, hidden_dim, rnn_num_layers,
+                                                dropout=rnn_dropout, batch_first=True)
+        self.decoder_embed = tf.keras.layers.Embedding(decoder_vocab_size, wordvec_dim)
+        self.decoder_rnn = tf.keras.layers.LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
+                                                dropout=rnn_dropout, batch_first=True)
+        self.decoder_linear = tf.keras.layers.Dense(decoder_vocab_size, input_shape=(hidden_dim,))
         self.NULL = null_token
         self.START = start_token
         self.END = end_token
@@ -57,17 +55,17 @@ class Seq2Seq(tf.Module):
         H = self.encoder_rnn.hidden_size
         L = self.encoder_rnn.num_layers
 
-        N = x.size(0) if x is not None else None
-        N = y.size(0) if N is None and y is not None else N
-        T_in = x.size(1) if x is not None else None
-        T_out = y.reshape(1, -1).size(1) if not y is None else None
+        N = x.shape(0) if x is not None else None
+        N = y.shape(0) if N is None and y is not None else N
+        T_in = x.shape(1) if x is not None else None
+        T_out = y.reshape(1, -1).shape(1) if not y is None else None
         return V_in, V_out, D, H, L, N, T_in, T_out
 
     def before_rnn(self, x, replace=0):
         # TODO: Use PackedSequence instead of manually plucking out the last
         # non-NULL entry of each sequence; it is cleaner and more efficient.
-        N, T = x.size()
-        idx = tf.Tensor(N).fill_(T - 1)
+        N, T = x.shape()
+        idx = tf.dtypes.cast(tf.fill([N], tf.int64(T - 1)), dtype=tf.int64)
 
         # Find the last non-null element in each sequence. Is there a clean
         # way to do this?
@@ -77,7 +75,7 @@ class Seq2Seq(tf.Module):
                 if x_cpu.data[i, t] != self.NULL and x_cpu.data[i, t + 1] == self.NULL:
                     idx[i] = t
                     break
-        idx = idx.type_as(x.data)
+        idx = tf.dtypes.cast(idx, dtype=tf.int64)
         x[x.data == self.NULL] = replace
         return x, tf.Variable(idx)
 
@@ -85,8 +83,8 @@ class Seq2Seq(tf.Module):
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
         x, idx = self.before_rnn(x)
         embed = self.encoder_embed(x)
-        h0 = tf.Variable(tf.zeros(L, N, H).type_as(embed.data))
-        c0 = tf.Variable(tf.zeros(L, N, H).type_as(embed.data))
+        h0 = tf.dtypes.cast(tf.Variable(tf.zeros(L, N, H), dtype=embed.data.dtype))
+        c0 = tf.dtypes.cast(tf.Variable(tf.zeros(L, N, H), dtype=embed.data.dtype))
 
         out, _ = self.encoder_rnn(embed, (h0, c0))
 
@@ -104,9 +102,9 @@ class Seq2Seq(tf.Module):
         encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
         rnn_input = tf.concat([encoded_repeat, y_embed], 2)
         if h0 is None:
-            h0 = tf.Variable(tf.zeros(L, N, H).type_as(encoded.data))
+            h0 = tf.dtypes.cast(tf.Variable(tf.zeros(L, N, H), dtype=encoded.data.dtype))
         if c0 is None:
-            c0 = tf.Variable(tf.zeros(L, N, H).type_as(encoded.data))
+            c0 = tf.dtypes.cast(tf.Variable(tf.zeros(L, N, H), dtype=encoded.data.dtype))
         rnn_output, (ht, ct) = self.decoder_rnn(rnn_input, (h0, c0))
 
         rnn_output_2d = rnn_output.contiguous().view(N * T_out, H)
@@ -130,17 +128,19 @@ class Seq2Seq(tf.Module):
         self.multinomial_outputs = None
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
         mask = y.data != self.NULL
-        y_mask = tf.Variable(tf.Tensor(N, T_out).fill_(0).type_as(mask))
+        y_mask_tf = tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
+        y_mask = tf.Variable(y_mask_tf)
         y_mask[:, 1:] = mask[:, 1:]
         y_masked = y[y_mask]
-        out_mask = tf.Variable(tf.Tensor(N, T_out).fill_(0).type_as(mask))
+        out_mask_tf = tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
+        out_mask = tf.Variable(out_mask_tf)
         out_mask[:, :-1] = mask[:, 1:]
         out_mask = out_mask.view(N, T_out, 1).expand(N, T_out, V_out)
         out_masked = output_logprobs[out_mask].reshape(-1, V_out)
-        loss = tf.sigmoid_cross_entropy_with_logits(out_masked, y_masked)  # CHANGE
+        loss = tf.nn.softmax_cross_entropy_with_logits(out_masked, y_masked)
         return loss
 
-    def forward(self, x, y):
+    def __call__(self, x, y):
         encoded = self.encoder(x)
         output_logprobs, _, _ = self.decoder(encoded, y)
         loss = self.compute_loss(output_logprobs, y)
@@ -150,12 +150,13 @@ class Seq2Seq(tf.Module):
         # TODO: Handle sampling for minibatch inputs
         # TODO: Beam search?
         self.multinomial_outputs = None
-        assert x.size(0) == 1, "Sampling minibatches not implemented"
+        assert x.shape(0) == 1, "Sampling minibatches not implemented"
         encoded = self.encoder(x)
         y = [self.START]
         h0, c0 = None, None
         while True:
-            cur_y = tf.Variable(tf.Tensor([y[-1]]).type_as(x.data).reshape(1, 1))
+            cur_y_tf = tf.dtypes.cast(tf.convert_to_tensor([y[-1]]).reshape(1, 1), dtype=x.data.dtype)
+            cur_y = tf.Variable(cur_y_tf)
             logprobs, h0, c0 = self.decoder(encoded, cur_y, h0=h0, c0=c0)
             _, next_y = logprobs.data.max(2)
             y.append(next_y[0, 0, 0])
@@ -164,11 +165,11 @@ class Seq2Seq(tf.Module):
         return y
 
     def reinforce_sample(self, x, max_length=30, temperature=1.0, argmax=False):
-        N, T = x.size(0), max_length
+        N, T = x.shape(0), max_length
         encoded = self.encoder(x)
-        y = tf.Tensor(N, T).fill_(self.NULL)
-        done = tf.Tensor(N).fill_(0)
-        cur_input = tf.Variable(x.data.new(N, 1).fill_(self.START))
+        y = tf.dtypes.cast(tf.fill([N, T], self.NULL), dtype=tf.int64)
+        done = tf.dtypes.cast(tf.fill([N], 0), dtype=tf.int8)
+        cur_input = tf.Variable(tf.dtypes.cast(tf.fill([N, 1], self.START), dtype=x.data.dtype))
         h, c = None, None
         self.multinomial_outputs = []
         self.multinomial_probs = []
@@ -176,7 +177,7 @@ class Seq2Seq(tf.Module):
             # logprobs is N x 1 x V
             logprobs, h, c = self.decoder(encoded, cur_input, h0=h, c0=c)
             logprobs = logprobs / temperature
-            probs = F.softmax(logprobs.view(N, -1))  # Now N x V
+            probs = tf.nn.softmax(logprobs.view(N, -1))  # Now N x V
             if argmax:
                 _, cur_output = probs.max(1)
             else:
@@ -190,9 +191,9 @@ class Seq2Seq(tf.Module):
             cur_input = cur_output
             if done.sum() == N:
                 break
-        return tf.Variable(y.type_as(x.data))
+        return tf.Variable(tf.dtypes.cast(y, dtype=x.data.dtype))
 
-    def reinforce_backward(self, reward, output_mask=None):
+    def reinforce_backward(self, reward, output_mask=None): #TODO make necessary changes
         """
     If output_mask is not None, then it should be a FloatTensor of shape (N, T)
     giving a multiplier to the output.

@@ -5,8 +5,8 @@ import tensorflow as tf
 
 class ConcatBlock(tf.Module):
     def __init__(self, dim, with_residual=True, with_batchnorm=True):
-        # super(ConcatBlock, self).__init__()
-        self.proj = tf.keras.layers.Conv2d(2 * dim, dim, kernel_size=(1, 1), padding=0)
+        super(ConcatBlock, self).__init__()
+        self.proj = tf.keras.layers.Conv2D(2 * dim, dim, kernel_size=(1, 1), padding=0)
         self.res_block = ResidualBlock(dim, with_residual=with_residual,
                                        with_batchnorm=with_batchnorm)
 
@@ -21,12 +21,14 @@ def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True):
     layers = []
     prev_dim = feature_dim
     for i in range(num_layers):
-        layers.append(tf.keras.layers.Conv2d(prev_dim, module_dim, kernel_size=(3, 3), padding=1))
+        layers.append(tf.keras.layers.Conv2D(prev_dim, module_dim, kernel_size=(3, 3), padding=1))
         if with_batchnorm:
-            layers.append(tf.nn.batch_normalization(module_dim))
+            layers.append(tf.keras.layers.BatchNormalization())
         layers.append(tf.keras.layers.ReLU())
         prev_dim = module_dim
-    return tf.keras.layers.Sequential(layers)
+
+    model = tf.keras.Sequential(layers=layers)
+    return model
 
 
 def build_classifier(module_C, module_H, module_W, num_answers,
@@ -35,31 +37,32 @@ def build_classifier(module_C, module_H, module_W, num_answers,
     layers = []
     prev_dim = module_C * module_H * module_W
     if proj_dim is not None and proj_dim > 0:
-        layers.append(tf.keras.layers.Conv2d(module_C, proj_dim, kernel_size=(1, 1)))
+        layers.append(tf.keras.layers.Conv2D(module_C, proj_dim, kernel_size=(1, 1)))
         if with_batchnorm:
-            layers.append(tf.nn.batch_normalization(proj_dim))
+            layers.append(tf.keras.layers.BatchNormalization())
         layers.append(tf.keras.layers.ReLU())
         prev_dim = proj_dim * module_H * module_W
     if downsample == 'maxpool2':
-        layers.append(tf.keras.layers.MaxPool2d(kernel_size=(2, 2), stride=2))
+        layers.append(tf.keras.layers.MaxPool2D(kernel_size=(2, 2), stride=2))
         prev_dim //= 4
     elif downsample == 'maxpool4':
-        layers.append(tf.keras.layers.MaxPool2d(kernel_size=(4, 4), stride=4))
+        layers.append(tf.keras.layers.MaxPool2D(kernel_size=(4, 4), stride=4))
         prev_dim //= 16
     layers.append(Flatten())
     for next_dim in fc_dims:
-        layers.append(tf.keras.layers.Linear(prev_dim, next_dim)) #TODO change Linear
+        layers.append(tf.keras.layers.Dense(next_dim, input_shape=(prev_dim, )))
         if with_batchnorm:
-            layers.append(tf.nn.batch_normalization(next_dim))
+            layers.append(tf.keras.layers.BatchNormalization())
         layers.append(tf.keras.layers.ReLU())
         if dropout > 0:
-            layers.append(tf.keras.layers.Dropout(p=dropout))
+            layers.append(tf.keras.layers.Dropout(dropout))
         prev_dim = next_dim
-    layers.append(tf.keras.layers.Linear(prev_dim, num_answers))
-    return tf.keras.layers.Sequential(layers)
+    layers.append(tf.keras.layers.Dense(num_answers, input_shape=(prev_dim, )))
+    model = tf.keras.Sequential(layers=layers)
+    return model
 
 
-class ModuleNet():
+class ModuleNet(tf.Module):
     def __init__(self, vocab, feature_dim=(1024, 14, 14),
                  stem_num_layers=2,
                  stem_batchnorm=False,
@@ -72,6 +75,8 @@ class ModuleNet():
                  classifier_batchnorm=False,
                  classifier_dropout=0,
                  verbose=True):
+        super(ModuleNet, self).__init__()
+
         self.stem = build_stem(feature_dim[0], module_dim,
                                num_layers=stem_num_layers,
                                with_batchnorm=stem_batchnorm)
@@ -111,7 +116,7 @@ class ModuleNet():
                 mod = ConcatBlock(module_dim,
                                   with_residual=module_residual,
                                   with_batchnorm=module_batchnorm)
-            self.add_module(fn_str, mod)
+            self.add_module(fn_str, mod) #TODO look for the replacement
             self.function_modules[fn_str] = mod
 
         self.save_module_outputs = False
@@ -123,10 +128,12 @@ class ModuleNet():
 
         old_weight = final_linear.weight.data
         old_bias = final_linear.bias.data
-        old_N, D = old_weight.size()
+        old_N, D = old_weight.shape
         new_N = 1 + max(answer_to_idx.values())
-        new_weight = old_weight.new(new_N, D).normal_().mul_(std)
-        new_bias = old_bias.new(new_N).fill_(init_b)
+
+        new_weight = tf.random.normal(shape=[new_N, D])
+        new_weight = tf.scalar_mul(std, new_weight)
+        new_bias = tf.fill([new_N], init_b)
         new_weight[:old_N].copy_(old_weight)
         new_bias[:old_N].copy_(old_bias)
 

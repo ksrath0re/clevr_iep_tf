@@ -34,7 +34,7 @@ def load_vocab(path):
     assert vocab['program_token_to_idx']['<END>'] == 2
     return vocab
 
-
+#TODO find replacement of loac_cpu one
 def load_cpu(path):
     """
     Loads a torch checkpoint, remapping all Tensors to CPU
@@ -43,22 +43,22 @@ def load_cpu(path):
 
 
 def load_program_generator(path):
-    checkpoint = load_cpu(path)
+    checkpoint = load_cpu(path)#TODO replacement of load_cpu
     kwargs = checkpoint['program_generator_kwargs']
     state = checkpoint['program_generator_state']
     model = Seq2Seq(**kwargs)
-    model.load_state_dict(state)
+    model.load_state_dict(state)#TODO load_state_dict
     return model, kwargs
 
 
 def load_execution_engine(path, verbose=True):
-    checkpoint = load_cpu(path) #TODO change load_cpu
+    checkpoint = load_cpu(path) #TODO replacement of load_cpu
     kwargs = checkpoint['execution_engine_kwargs']
     state = checkpoint['execution_engine_state']
     kwargs['verbose'] = verbose
     model = ModuleNet(**kwargs)
     cur_state = model.state_dict()
-    model.load_state_dict(state)
+    model.load_state_dict(state)#TODO load_state_dict
     return model, kwargs
 
 
@@ -68,11 +68,11 @@ def load_baseline(path):
         'CNN+LSTM': CnnLstmModel,
         'CNN+LSTM+SA': CnnLstmSaModel,
     }
-    checkpoint = load_cpu(path)
+    checkpoint = load_cpu(path) #TODO replacement of load_cpu
     baseline_type = checkpoint['baseline_type']
     kwargs = checkpoint['baseline_kwargs']
     state = checkpoint['baseline_state']
 
     model = model_cls_dict[baseline_type](**kwargs)
-    model.load_state_dict(state)
+    model.load_state_dict(state) #TODO load_state_dict
     return model, kwargs

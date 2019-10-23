@@ -10,7 +10,7 @@ class ResidualBlock(tf.Module):
             out_dim = in_dim
         super(ResidualBlock, self).__init__()
         self.conv1 = tf.keras.layers.Conv2D(in_channels=in_dim, out_channels=out_dim, kernel_size=(3, 3), padding=1)
-        self.conv2 = tf.keras.layers.Conv2D(in_channels=in_dim, out_channels=out_dim, kernel_size=(3, 3), padding=1)
+        self.conv2 = tf.keras.layers.Conv2D(in_channels=out_dim, out_channels=out_dim, kernel_size=(3, 3), padding=1)
         self.with_batchnorm = with_batchnorm
         if with_batchnorm:
             self.bn1 = nn.batch_normalization(out_dim)
@@ -41,6 +41,6 @@ class GlobalAveragePool(tf.Module):
         return x.reshape(N, C, -1).mean(2).squeeze(2)
 
 
-class Flatten(tf.keras.Model):
+class Flatten(tf.Module):
     def __call__(self, x):
         return x.reshape(x.size(0), -1)

@@ -24,6 +24,7 @@ numpy_type_map = {
     'uint8': torch.ByteTensor,
 }
 
+
 class Dataset(object):
     """An abstract class representing a Dataset.
 
@@ -144,7 +145,7 @@ class DataLoader(object):
         return len(self.batch_sampler)
 
 
-def default_collate(batch):
+def default_collate(batch): #TODO chanege this
     r"""Puts each data field into a tensor with outer dimension batch size"""
 
     error_msg = "batch must contain tensors, numbers, dicts or lists; found {}"
@@ -181,7 +182,7 @@ def _dataset_to_tensor(dset, mask=None):
     arr = np.asarray(dset, dtype=np.int64)
     if mask is not None:
         arr = arr[mask]
-    tensor = tf.convert_to_tensor(arr)
+    tensor = tf.dtypes.cast(arr, dtype=tf.int64)
     return tensor
 
 

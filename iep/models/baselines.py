@@ -1,6 +1,4 @@
-
-
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 
 # Copyright 2017-present, Facebook, Inc.
 # All rights reserved.
@@ -10,14 +8,14 @@
 
 import tensorflow as tf
 import tensorflow.nn as nn
-#import torch.nn.functional as F
-#from torch.autograd import Variable
+# import torch.nn.functional as F
+# from torch.autograd import Variable
 
 from iep.models.layers import ResidualBlock
 from iep.embedding import expand_embedding_vocab
 
 
-class StackedAttention(tf.keras.Model):
+class StackedAttention(tf.Module):
     def __init__(self, input_dim, hidden_dim):
         super(StackedAttention, self).__init__()
         self.Wv = tf.keras.layers.Conv2d(input_dim, hidden_dim, kernel_size=(1, 1), padding=0)
@@ -26,7 +24,7 @@ class StackedAttention(tf.keras.Model):
         self.hidden_dim = hidden_dim
         self.attention_maps = None
 
-    def call(self, v, u):
+    def __call__(self, v, u):
         """
         Input:
         - v: N x D x H x W
@@ -35,8 +33,8 @@ class StackedAttention(tf.keras.Model):
         Returns:
         - next_u: N x D
         """
-        N, K = v.size(0), self.hidden_dim
-        D, H, W = v.size(1), v.size(2), v.size(3)
+        N, K = v.shape(0), self.hidden_dim
+        D, H, W = v.shape(1), v.shape(2), v.shape(3)
         v_proj = self.Wv(v)  # N x K x H x W
         u_proj = self.Wu(u)  # N x K
         u_proj_expand = u_proj.reshape(N, K, 1, 1).expand(N, K, H, W)
@@ -49,7 +47,7 @@ class StackedAttention(tf.keras.Model):
         return next_u
 
 
-class LstmEncoder(tf.keras.Model):
+class LstmEncoder(tf.Module):
     def __init__(self, token_to_idx, wordvec_dim=300,
                  rnn_dim=256, rnn_num_layers=2, rnn_dropout=0):
         super(LstmEncoder, self).__init__()
@@ -58,33 +56,33 @@ class LstmEncoder(tf.keras.Model):
         self.START = token_to_idx['<START>']
         self.END = token_to_idx['<END>']
 
-        self.embed = tf.get_variable("embed", [len(token_to_idx), wordvec_dim])
-        self.embed = nn.Embedding(len(token_to_idx), wordvec_dim)
-        self.rnn = nn.LSTM(wordvec_dim, rnn_dim, rnn_num_layers,
-                           dropout=rnn_dropout, batch_first=True)  # CHANGE
+        self.embed = tf.keras.layers.Embedding(len(token_to_idx), wordvec_dim)
+        self.rnn = tf.keras.layers.LSTM(wordvec_dim, rnn_dim, rnn_num_layers,
+                                        dropout=rnn_dropout, batch_first=True)  # CHANGE
 
     def expand_vocab(self, token_to_idx, word2vec=None, std=0.01):
         expand_embedding_vocab(self.embed, token_to_idx,
                                word2vec=word2vec, std=std)
 
-    def call(self, x):
-        N, T = x.size()
-        idx = tf.Tensor(N).fill_(T - 1)
+    def __call__(self, x):
+        N, T = x.shape
+        idx = tf.dtypes.cast(tf.fill([N], (T - 1)), dtype=tf.int64)
 
         # Find the last non-null element in each sequence
-        x_cpu = x.data.cpu()
+        x_cpu = x.data.cpu()  # TODO cpu replacement
         for i in range(N):
             for t in range(T - 1):
                 if x_cpu[i, t] != self.NULL and x_cpu[i, t + 1] == self.NULL:
                     idx[i] = t
                     break
-        idx = idx.type_as(x.data).long()
-        idx = tf.Variable(idx)
+        idx = tf.dtypes.cast(idx, dtype=tf.int64)
+        idx = tf.Variable(initial_value=idx)
 
         hs, _ = self.rnn(self.embed(x))
-        idx = idx.reshape(N, 1, 1).expand(N, 1, hs.size(2))
-        H = hs.size(2)
+        idx = idx.reshape(N, 1, 1).expand(N, 1, hs.shape(2))
+        H = hs.shape(2)
         return hs.gather(1, idx).reshape(N, H)
+
 
 def build_cnn(feat_dim=(1024, 14, 14),
               res_block_dim=128,
@@ -94,41 +92,49 @@ def build_cnn(feat_dim=(1024, 14, 14),
     C, H, W = feat_dim
     layers = []
     if num_res_blocks > 0:
-        layers.append(tf.keras.layers.Conv2d(C, res_block_dim, kernel_size=(3, 3), padding=1))
-        layers.append(nn.ReLU())
+        layers.append(tf.keras.layers.Conv2D(C, res_block_dim, kernel_size=(3, 3), padding=1))
+        layers.append(nn.relu())
         C = res_block_dim
         for _ in range(num_res_blocks):
             layers.append(ResidualBlock(C))
     if proj_dim > 0:
-        layers.append(tf.keras.layers.Conv2d(C, proj_dim, kernel_size=(1, 1), padding=0))
-        layers.append(nn.ReLU())
+        layers.append(tf.keras.layers.Conv2D(C, proj_dim, kernel_size=(1, 1), padding=0))
+        layers.append(tf.keras.layers.ReLU())
         C = proj_dim
     if pooling == 'maxpool2':
-        layers.append(tf.keras.layers.MaxPool2d(kernel_size=(2, 2), stride=2))
+        layers.append(tf.keras.layers.MaxPool2D(kernel_size=(2, 2), stride=2))
         H, W = H // 2, W // 2
-    return nn.Sequential(*layers), (C, H, W)
+
+    model = tf.keras.Sequential()
+    for layer in layers:
+        model.add(layer)
+    return model, (C, H, W)
+
 
 def build_mlp(input_dim, hidden_dims, output_dim,
               use_batchnorm=False, dropout=0):
     layers = []
     D = input_dim
     if dropout > 0:
-        layers.append(nn.Dropout(p=dropout))
+        layers.append(tf.keras.layers.Dropout(dropout))
     if use_batchnorm:
-        layers.append(tf.keras.layers.batch_normalization(input_dim))
+        layers.append(tf.keras.layers.BatchNormalization())
     for dim in hidden_dims:
-        layers.append(nn.Linear(D, dim))  # CHANGE
+        layers.append(tf.keras.layers.Dense(dim, input_shape=(D,)))
         if use_batchnorm:
-            layers.append(tf.keras.layers.batch_normalization(dim))
+            layers.append(tf.keras.layers.BatchNormalization())
         if dropout > 0:
-            layers.append(nn.Dropout(p=dropout))
-        layers.append(tf.keras.layers.batch_normalization.ReLU())
+            layers.append(tf.keras.layers.Dropout(dropout))
+        layers.append(tf.keras.layers.ReLU())
         D = dim
-    layers.append(nn.Linear(D, output_dim))  # CHANGE
-    return tf.keras.layers.Sequential(layers)
+    layers.append(tf.keras.layers.Dense(output_dim, input_shape=(D,)))
+    model = tf.keras.Sequential()
+    for layer in layers:
+        model.add(layer)
+    return model
 
 
-class LstmModel(tf.keras.Model):
+class LstmModel(tf.Module):
     def __init__(self, vocab,
                  rnn_wordvec_dim=300, rnn_dim=256, rnn_num_layers=2, rnn_dropout=0,
                  fc_use_batchnorm=False, fc_dropout=0, fc_dims=(1024,)):
@@ -150,13 +156,13 @@ class LstmModel(tf.keras.Model):
         }
         self.classifier = build_mlp(**classifier_kwargs)
 
-    def forward(self, questions, feats):
+    def __call__(self, questions, feats):
         q_feats = self.rnn(questions)
         scores = self.classifier(q_feats)
         return scores
 
 
-class CnnLstmModel(tf.keras.Model):
+class CnnLstmModel(tf.Module):
     def __init__(self, vocab,
                  rnn_wordvec_dim=300, rnn_dim=256, rnn_num_layers=2, rnn_dropout=0,
                  cnn_feat_dim=(1024, 14, 14),
@@ -190,7 +196,7 @@ class CnnLstmModel(tf.keras.Model):
         }
         self.classifier = build_mlp(**classifier_kwargs)
 
-    def forward(self, questions, feats):
+    def __call__(self, questions, feats):
         N = questions.size(0)
         assert N == feats.size(0)
         q_feats = self.rnn(questions)
@@ -200,7 +206,7 @@ class CnnLstmModel(tf.keras.Model):
         return scores
 
 
-class CnnLstmSaModel(tf.keras.Model):
+class CnnLstmSaModel(tf.Module):
     def __init__(self, vocab,
                  rnn_wordvec_dim=300, rnn_dim=256, rnn_num_layers=2, rnn_dropout=0,
                  cnn_feat_dim=(1024, 14, 14),
@@ -217,12 +223,12 @@ class CnnLstmSaModel(tf.keras.Model):
         self.rnn = LstmEncoder(**rnn_kwargs)
 
         C, H, W = cnn_feat_dim
-        self.image_proj = nn.Conv2d(C, rnn_dim, kernel_size=(1, 1), padding=0)
+        self.image_proj = tf.keras.layers.Conv2D(C, rnn_dim, kernel_size=(1, 1), padding=0)
         self.stacked_attns = []
         for i in range(num_stacked_attn):
             sa = StackedAttention(rnn_dim, stacked_attn_dim)
             self.stacked_attns.append(sa)
-            self.add_module('stacked-attn-%d' % i, sa)
+            self.add_module('stacked-attn-%d' % i, sa) #TODO lookup for replacement
 
         classifier_args = {
             'input_dim': rnn_dim,
@@ -233,7 +239,7 @@ class CnnLstmSaModel(tf.keras.Model):
         }
         self.classifier = build_mlp(**classifier_args)
 
-    def forward(self, questions, feats):
+    def __call__(self, questions, feats):
         u = self.rnn(questions)
         v = self.image_proj(feats)
 
@@ -242,4 +248,3 @@ class CnnLstmSaModel(tf.keras.Model):
 
         scores = self.classifier(u)
         return scores
-
