@@ -12,6 +12,7 @@ import tensorflow as tf
 import re
 import iep.programs
 import collections
+import collections.abc
 
 numpy_type_map = {
     'float64': torch.DoubleTensor,
@@ -145,7 +146,7 @@ class DataLoader(object):
         return len(self.batch_sampler)
 
 
-def default_collate(batch): #TODO chanege this
+def default_collate(batch):
     r"""Puts each data field into a tensor with outer dimension batch size"""
 
     error_msg = "batch must contain tensors, numbers, dicts or lists; found {}"
@@ -159,19 +160,19 @@ def default_collate(batch): #TODO chanege this
             if re.search('[SaUO]', elem.dtype.str) is not None:
                 raise TypeError(error_msg.format(elem.dtype))
 
-            return torch.stack([torch.from_numpy(b) for b in batch], 0)
+            return tf.stack([tf.convert_to_tensor(b) for b in batch], 0)
         if elem.shape == ():  # scalars
             py_type = float if elem.dtype.name.startswith('float') else int
             return numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
     elif isinstance(batch[0], int):
-        return torch.LongTensor(batch)
+        return tf.convert_to_tensor(batch, dtype=tf.int64)
     elif isinstance(batch[0], float):
-        return torch.DoubleTensor(batch)
+        return tf.convert_to_tensor(batch, dtype=tf.float64)
     elif isinstance(batch[0], (str, bytes)):
         return batch
-    elif isinstance(batch[0], collections.Mapping):
+    elif isinstance(batch[0], collections.abc.Mapping):
         return {key: default_collate([d[key] for d in batch]) for key in batch[0]}
-    elif isinstance(batch[0], collections.Sequence):
+    elif isinstance(batch[0], collections.abc.Sequence):
         transposed = zip(*batch)
         return [default_collate(samples) for samples in transposed]
 
@@ -182,7 +183,7 @@ def _dataset_to_tensor(dset, mask=None):
     arr = np.asarray(dset, dtype=np.int64)
     if mask is not None:
         arr = arr[mask]
-    tensor = tf.dtypes.cast(arr, dtype=tf.int64)
+    tensor = tf.convert_to_tensor(arr, dtype=tf.int64)
     return tensor
 
 
