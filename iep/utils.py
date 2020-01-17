@@ -1,6 +1,7 @@
 import json
 import tensorflow as tf
 
+
 # !/usr/bin/env python3
 
 # Copyright 2017-present, Facebook, Inc.
@@ -31,7 +32,7 @@ def load_vocab(path):
     assert vocab['question_token_to_idx']['<END>'] == 2
     assert vocab['program_token_to_idx']['<NULL>'] == 0
     assert vocab['program_token_to_idx']['<START>'] == 1
-    assert vocab['program_token_to_idx']['<END>'] == 2
+    assert vocab['program_token_to_idx']['<END>']  == 2
     return vocab
 
 #TODO find replacement of loac_cpu one

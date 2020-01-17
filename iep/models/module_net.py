@@ -141,7 +141,7 @@ class ModuleNet(tf.Module):
         final_linear.bias.data = new_bias
 
     def _forward_modules_json(self, feats, program):
-        def gen_hook(i, j):  # CHANGE
+        def gen_hook(i, j):  #TODO CHANGE
             def hook(grad):  # CHANGE
                 self.all_module_grad_outputs[i][j] = grad.data.cpu().clone()  # CHANGE
 
@@ -150,7 +150,7 @@ class ModuleNet(tf.Module):
         self.all_module_outputs = []
         self.all_module_grad_outputs = []
         # We can't easily handle minibatching of modules, so just do a loop
-        N = feats.size(0)
+        N = feats.shape(0)
         final_module_outputs = []
         for i in range(N):
             if self.save_module_outputs:
@@ -207,9 +207,9 @@ class ModuleNet(tf.Module):
         program: LongTensor of shape (N, L) giving a prefix-encoded program for
           each image.
         """
-        N = feats.size(0)
+        N = feats.shape(0)
         final_module_outputs = []
-        self.used_fns = tf.Tensor(program.size()).fill_(0)
+        self.used_fns = tf.fill(program.shape, value=0)
         for i in range(N):
             cur_output, _ = self._forward_modules_ints_helper(feats, program, i, 0)
             final_module_outputs.append(cur_output)
@@ -217,8 +217,8 @@ class ModuleNet(tf.Module):
         final_module_outputs = tf.concat(final_module_outputs, 0)
         return final_module_outputs
 
-    def forward(self, x, program):
-        N = x.size(0)
+    def __call__(self, x, program):
+        N = x.shape(0)
         assert N == len(program)
 
         feats = self.stem(x)

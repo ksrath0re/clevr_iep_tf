@@ -33,11 +33,11 @@ class Seq2Seq(tf.Module):
                  ):
 
         self.encoder_embed = tf.keras.layers.Embedding(encoder_vocab_size, wordvec_dim)
-        self.encoder_rnn = tf.keras.layers.LSTM(wordvec_dim, hidden_dim, rnn_num_layers,
-                                                dropout=rnn_dropout, batch_first=True)
+        encoder_cells = [tf.keras.layers.LSTMCell(hidden_dim) for _ in range(rnn_num_layers)]
+        self.encoder_rnn = tf.keras.layers.StackedRNNCells(encoder_cells)
         self.decoder_embed = tf.keras.layers.Embedding(decoder_vocab_size, wordvec_dim)
-        self.decoder_rnn = tf.keras.layers.LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
-                                                dropout=rnn_dropout, batch_first=True)
+        decoder_cells = [tf.keras.layers.LSTMCell(hidden_dim) for _ in range(rnn_num_layers)]
+        self.decoder_rnn = tf.keras.layers.StackedRNNCells(decoder_cells)
         self.decoder_linear = tf.keras.layers.Dense(decoder_vocab_size, input_shape=(hidden_dim,))
         self.NULL = null_token
         self.START = start_token
@@ -98,8 +98,8 @@ class Seq2Seq(tf.Module):
         if T_out > 1:
             y, _ = self.before_rnn(y)
         y_embed = self.decoder_embed(y)
-        y_embed = y_embed.view(y_embed.shape[0], -1, y_embed.shape[-1])
-        encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
+        y_embed = y_embed.reshape(y_embed.shape[0], -1, y_embed.shape[-1])
+        encoded_repeat = encoded.reshape(N, 1, H).expand(N, T_out, H)
         rnn_input = tf.concat([encoded_repeat, y_embed], 2)
         if h0 is None:
             h0 = tf.dtypes.cast(tf.Variable(tf.zeros(L, N, H), dtype=encoded.data.dtype))
@@ -135,7 +135,7 @@ class Seq2Seq(tf.Module):
         out_mask_tf = tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
         out_mask = tf.Variable(out_mask_tf)
         out_mask[:, :-1] = mask[:, 1:]
-        out_mask = out_mask.view(N, T_out, 1).expand(N, T_out, V_out)
+        out_mask = out_mask.reshape(N, T_out, 1).expand(N, T_out, V_out)
         out_masked = output_logprobs[out_mask].reshape(-1, V_out)
         loss = tf.nn.softmax_cross_entropy_with_logits(out_masked, y_masked)
         return loss
@@ -177,7 +177,7 @@ class Seq2Seq(tf.Module):
             # logprobs is N x 1 x V
             logprobs, h, c = self.decoder(encoded, cur_input, h0=h, c0=c)
             logprobs = logprobs / temperature
-            probs = tf.nn.softmax(logprobs.view(N, -1))  # Now N x V
+            probs = tf.nn.softmax(logprobs.reshape(N, -1))  # Now N x V
             if argmax:
                 _, cur_output = probs.max(1)
             else:
