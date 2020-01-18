@@ -11,9 +11,8 @@ import tensorflow as tf
 # LICENSE file in the root directory of this source tree.
 
 import json
-import torch
-
-from iep.models import ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel
+import tensorflow as tf
+from iep.models import LstmModel, CnnLstmModel, CnnLstmSaModel
 
 
 def invert_dict(d):
@@ -38,29 +37,12 @@ def load_vocab(path):
 #TODO find replacement of loac_cpu one
 def load_cpu(path):
     """
-    Loads a torch checkpoint, remapping all Tensors to CPU
+    Loads a checkpoint, remapping all Tensors to CPU
     """
-    return tf.train.load_checkpoint(path, map_location=lambda storage, loc: storage)
+    saver = tf.train.Saver()
 
-
-def load_program_generator(path):
-    checkpoint = load_cpu(path)#TODO replacement of load_cpu
-    kwargs = checkpoint['program_generator_kwargs']
-    state = checkpoint['program_generator_state']
-    model = Seq2Seq(**kwargs)
-    model.load_state_dict(state)#TODO load_state_dict
-    return model, kwargs
-
-
-def load_execution_engine(path, verbose=True):
-    checkpoint = load_cpu(path) #TODO replacement of load_cpu
-    kwargs = checkpoint['execution_engine_kwargs']
-    state = checkpoint['execution_engine_state']
-    kwargs['verbose'] = verbose
-    model = ModuleNet(**kwargs)
-    cur_state = model.state_dict()
-    model.load_state_dict(state)#TODO load_state_dict
-    return model, kwargs
+    with tf.Session() as sess:
+        return saver.restore(sess, path)
 
 
 def load_baseline(path):
@@ -69,11 +51,11 @@ def load_baseline(path):
         'CNN+LSTM': CnnLstmModel,
         'CNN+LSTM+SA': CnnLstmSaModel,
     }
-    checkpoint = load_cpu(path) #TODO replacement of load_cpu
+    checkpoint = load_cpu(path)
     baseline_type = checkpoint['baseline_type']
     kwargs = checkpoint['baseline_kwargs']
     state = checkpoint['baseline_state']
 
     model = model_cls_dict[baseline_type](**kwargs)
-    model.load_state_dict(state) #TODO load_state_dict
+    model.load_state_dict(state)
     return model, kwargs

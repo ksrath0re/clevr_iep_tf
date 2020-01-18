@@ -9,11 +9,17 @@ import h5py
 import numpy as np
 from scipy.misc import imread, imresize
 import tensorflow as tf
-import tensorflow_hub as hub
-
-
+import cv2
+import tensorflow.keras.applications.resnet50 as resnet50
+from tensorflow.keras.models import Model
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.backend import eval
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--extract_features_for', default='train', type=str,
+                    help='Please provide in the type of dataset for which you'
+                         'want to extract features. The allowed dataset are'
+                         'train, val and test.')
 parser.add_argument('--input_image_dir', required=True)
 parser.add_argument('--max_images', default=None, type=int)
 parser.add_argument('--output_h5_file', required=True)
@@ -27,88 +33,102 @@ parser.add_argument('--batch_size', default=128, type=int)
 
 
 def build_model(args):
+    if not hasattr(resnet50, args.model):
+        raise ValueError('Invalid model "%s"' % args.model)
+    if 'resnet' not in args.model.lower():
+        raise ValueError('Feature extraction only supports ResNets')
 
-  if not 'resnet' in args.model:
-    raise ValueError('Feature extraction only supports ResNets')
-  module = hub.Module("https://tfhub.dev/google/imagenet/resnet_v2_50/feature_vector/3")
-  cnn = getattr(module, args.model)(pretrained=True)
-  layers = [
-    cnn.conv1,
-    cnn.bn1,
-    cnn.relu,
-    cnn.maxpool,
-  ]
-  for i in range(args.model_stage):
-    name = 'layer%d' % (i + 1)
-    layers.append(getattr(cnn, name))
-  model = tf.nn.Sequential(layers)
-  model.cuda()
-  model.eval()
-  return model
+    '''
+    Transfer learning: it helps to utilise previously trained network, rather
+    than training new complex models by using their learned weights and then use
+    standard training methods to learn the remaining, non-reused parameters.
+    '''
+    original_model = getattr(tf.keras.applications.resnet50, 'ResNet50')(
+        weights='imagenet')
+
+    bottleneck_input = original_model.get_layer(index=0).input
+    bottleneck_output = original_model.get_layer(index=-2).output
+    bottleneck_model = Model(inputs=bottleneck_input, outputs=bottleneck_output)
+
+    '''Set every layer in the model to be non-trainable'''
+    for layer in bottleneck_model.layers:
+        layer.trainable = False
+
+    model = Sequential()
+    model.add(bottleneck_model)
+    '''This output of the model is flattened  into (2048, ).'''
+
+    '''Check the link 
+    https://towardsdatascience.com/how-to-train-your-model-dramatically-faster-9ad063f0f718
+    for fitting
+    '''
+    return model
 
 
 def run_batch(cur_batch, model):
-  mean = np.array([0.485, 0.456, 0.406]).reshape(1, 3, 1, 1)
-  std = np.array([0.229, 0.224, 0.224]).reshape(1, 3, 1, 1)
+    image_batch = np.concatenate(cur_batch, 0).astype(np.float32)
+    image_batch = tf.keras.utils.normalize(image_batch)
+    image_batch = tf.convert_to_tensor(image_batch)
 
-  image_batch = np.concatenate(cur_batch, 0).astype(np.float32)
-  image_batch = (image_batch / 255.0 - mean) / std
-  image_batch = tf.Tensor(image_batch).cuda()
-  image_batch = tf.Variable(image_batch)
-
-  feats = model(image_batch)
-  feats = feats.data.cpu().clone().numpy()
-
-  return feats
+    features = model(image_batch)
+    return eval(features)
 
 
 def main(args):
-  input_paths = []
-  idx_set = set()
-  for fn in os.listdir(args.input_image_dir):
-    if not fn.endswith('.png'): continue
-    idx = int(os.path.splitext(fn)[0].split('_')[-1])
-    input_paths.append((os.path.join(args.input_image_dir, fn), idx))
-    idx_set.add(idx)
-  input_paths.sort(key=lambda x: x[1])
-  assert len(idx_set) == len(input_paths)
-  assert min(idx_set) == 0 and max(idx_set) == len(idx_set) - 1
-  if args.max_images is not None:
-    input_paths = input_paths[:args.max_images]
-  print(input_paths[0])
-  print(input_paths[-1])
+    input_paths = []
+    idx_set = set()
+    for fn in os.listdir(args.input_image_dir):
+        if not fn.endswith('.png'): continue
+        idx = int(os.path.splitext(fn)[0].split('_')[-1])
+        input_paths.append((os.path.join(args.input_image_dir, fn), idx))
+        idx_set.add(idx)
+    input_paths.sort(key=lambda x: x[1])
+    assert len(idx_set) == len(input_paths)
+    assert min(idx_set) == 0 and max(idx_set) == len(idx_set) - 1
+    if args.max_images is not None:
+        input_paths = input_paths[:args.max_images]
+    print(input_paths[0])
+    print(input_paths[-1])
 
-  model = build_model(args)
+    model = build_model(args)
 
-  img_size = (args.image_height, args.image_width)
-  with h5py.File(args.output_h5_file, 'w') as f:
-    feat_dset = None
-    i0 = 0
-    cur_batch = []
-    for i, (path, idx) in enumerate(input_paths):
-      img = imread(path, mode='RGB')
-      img = imresize(img, img_size, interp='bicubic')
-      img = img.transpose(2, 0, 1)[None]
-      cur_batch.append(img)
-      if len(cur_batch) == args.batch_size:
-        feats = run_batch(cur_batch, model)
-        if feat_dset is None:
-          N = len(input_paths)
-          _, C, H, W = feats.shape
-          feat_dset = f.create_dataset('features', (N, C, H, W),
-                                       dtype=np.float32)
-        i1 = i0 + len(cur_batch)
-        feat_dset[i0:i1] = feats
-        i0 = i1
-        print('Processed %d / %d images' % (i1, len(input_paths)))
-        cur_batch = []
-    if len(cur_batch) > 0:
-      feats = run_batch(cur_batch, model)
-      i1 = i0 + len(cur_batch)
-      feat_dset[i0:i1] = feats
-      print('Processed %d / %d images' % (i1, len(input_paths)))
+    with h5py.File(args.output_h5_file, 'w') as f:
+        features_dataset = None
+        i0 = 0
+        current_batch = []
+        for i, (path, idx) in enumerate(input_paths):
+            img = cv2.imread(path)
+            img = img[None]
+            current_batch.append(img)
+            if len(current_batch) == args.batch_size:
+                features = run_batch(current_batch, model)
+                if features_dataset is None:
+                    N = len(input_paths)
+                    _, C = features.shape
+                    features_dataset = f.create_dataset('features', (N, C),
+                                                        dtype=np.float32)
+                i1 = i0 + len(current_batch)
+                features_dataset[i0:i1] = features
+                i0 = i1
+                print('Processed %d / %d images' % (i1, len(input_paths)))
+                current_batch.clear()
+
+        if len(current_batch) > 0:
+            features = run_batch(current_batch, model)
+            i1 = i0 + len(current_batch)
+            features_dataset[i0:i1] = features
+            print('Processed %d / %d images' % (i1, len(input_paths)))
 
 
 if __name__ == '__main__':
-  args = parser.parse_args()
-  main(args)
+    args = parser.parse_args()
+    if args.extract_features_for == 'train' and args.input_image_dir is None:
+        args.input_image_dir = '../../clevr-dataset-gen/output/train/images/'
+        args.output_h5_file = '../output/features/train_features.h5'
+    elif args.extract_features_for == 'val' and args.input_image_dir is None:
+        args.input_image_dir = '../../clevr-dataset-gen/output/val/images/'
+        args.output_h5_file = '../output/features/val_features.h5'
+    elif args.extract_features_for == 'test' and args.input_image_dir is None:
+        args.input_image_dir = '../../clevr-dataset-gen/output/test/images/'
+        args.output_h5_file = '../output/features/test_features.h5'
+    main(args)
