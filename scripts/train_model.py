@@ -20,11 +20,12 @@ import shutil
 import torch.nn.functional as F
 import numpy as np
 import h5py
-
+import tensorflow as tf
 import iep.utils as utils
 import iep.preprocess
 from iep.data import ClevrDataset, ClevrDataLoader
 from iep.models import ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel
+from tensorflow.keras import optimizers
 
 
 parser = argparse.ArgumentParser()
@@ -47,7 +48,7 @@ parser.add_argument('--num_val_samples', default=10000, type=int)
 parser.add_argument('--shuffle_train_data', default=1, type=int)
 
 # What type of model to use and which parts to train
-parser.add_argument('--model_type', default='PG',
+parser.add_argument('--model_type', default='PG+EE',
         choices=['PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
@@ -169,26 +170,14 @@ def train_loop(args, train_loader, val_loader):
   # Set up model
   if args.model_type == 'PG' or args.model_type == 'PG+EE':
     program_generator, pg_kwargs = get_program_generator(args)
-    pg_optimizer = torch.optim.Adam(program_generator.parameters(),
-                                    lr=args.learning_rate)
+    pg_optimizer = optimizers.Adam(args.learning_rate)
     print('Here is the program generator:')
     print(program_generator)
   if args.model_type == 'EE' or args.model_type == 'PG+EE':
     execution_engine, ee_kwargs = get_execution_engine(args)
-    ee_optimizer = torch.optim.Adam(execution_engine.parameters(),
-                                    lr=args.learning_rate)
+    ee_optimizer = optimizers.Adam(args.learning_rate)
     print('Here is the execution engine:')
     print(execution_engine)
-  if args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
-    baseline_model, baseline_kwargs = get_baseline_model(args)
-    params = baseline_model.parameters()
-    if args.baseline_train_only_rnn == 1:
-      params = baseline_model.rnn.parameters()
-    baseline_optimizer = torch.optim.Adam(params, lr=args.learning_rate)
-    print('Here is the baseline model')
-    print(baseline_model)
-    baseline_type = args.model_type
-  loss_fn = torch.nn.CrossEntropyLoss().cuda()
 
   stats = {
     'train_losses': [], 'train_rewards': [], 'train_losses_ts': [],
@@ -197,7 +186,7 @@ def train_loop(args, train_loader, val_loader):
   }
   t, epoch, reward_moving_average = 0, 0, 0
 
-  set_mode('train', [program_generator, execution_engine, baseline_model])
+  #set_mode('train', [program_generator, execution_engine, baseline_model])
 
   print('train_loader has %d samples' % len(train_loader.dataset))
   print('val_loader has %d samples' % len(val_loader.dataset))
@@ -208,11 +197,11 @@ def train_loop(args, train_loader, val_loader):
     for batch in train_loader:
       t += 1
       questions, _, feats, answers, programs, _ = batch
-      questions_var = Variable(questions.cuda())
-      feats_var = Variable(feats.cuda())
-      answers_var = Variable(answers.cuda())
+      questions_var = tf.Variable(questions)
+      feats_var = tf.Variable(feats)
+      answers_var = tf.Variable(answers)
       if programs[0] is not None:
-        programs_var = Variable(programs.cuda())
+        programs_var = tf.Variable(programs)
 
       reward = None
       if args.model_type == 'PG':
@@ -228,13 +217,6 @@ def train_loop(args, train_loader, val_loader):
         loss = loss_fn(scores, answers_var)
         loss.backward()
         ee_optimizer.step()
-      elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
-        baseline_optimizer.zero_grad()
-        baseline_model.zero_grad()
-        scores = baseline_model(questions_var, feats_var)
-        loss = loss_fn(scores, answers_var)
-        loss.backward()
-        baseline_optimizer.step()
       elif args.model_type == 'PG+EE':
         programs_pred = program_generator.reinforce_sample(questions_var)
         scores = execution_engine(feats_var, programs_pred)
@@ -323,34 +305,20 @@ def get_state(m):
 
 def get_program_generator(args):
   vocab = utils.load_vocab(args.vocab_json)
-  if args.program_generator_start_from is not None:
-    pg, kwargs = utils.load_program_generator(args.program_generator_start_from)
-    cur_vocab_size = pg.encoder_embed.weight.size(0)
-    if cur_vocab_size != len(vocab['question_token_to_idx']):
-      print('Expanding vocabulary of program generator')
-      pg.expand_encoder_vocab(vocab['question_token_to_idx'])
-      kwargs['encoder_vocab_size'] = len(vocab['question_token_to_idx'])
-  else:
-    kwargs = {
+  kwargs = {
       'encoder_vocab_size': len(vocab['question_token_to_idx']),
       'decoder_vocab_size': len(vocab['program_token_to_idx']),
       'wordvec_dim': args.rnn_wordvec_dim,
       'hidden_dim': args.rnn_hidden_dim,
       'rnn_num_layers': args.rnn_num_layers,
       'rnn_dropout': args.rnn_dropout,
-    }
-    pg = Seq2Seq(**kwargs)
-  pg.cuda()
-  pg.train()
+  }
+  pg = Seq2Seq(**kwargs)
   return pg, kwargs
 
 
 def get_execution_engine(args):
-  vocab = utils.load_vocab(args.vocab_json)
-  if args.execution_engine_start_from is not None:
-    ee, kwargs = utils.load_execution_engine(args.execution_engine_start_from)
-    # TODO: Adjust vocab?
-  else:
+    vocab = utils.load_vocab(args.vocab_json)
     kwargs = {
       'vocab': vocab,
       'feature_dim': parse_int_list(args.feature_dim),
@@ -366,9 +334,7 @@ def get_execution_engine(args):
       'classifier_dropout': args.classifier_dropout,
     }
     ee = ModuleNet(**kwargs)
-  ee.cuda()
-  ee.train()
-  return ee, kwargs
+    return ee, kwargs
 
 
 def get_baseline_model(args):
@@ -447,17 +413,17 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
   for batch in loader:
     questions, _, feats, answers, programs, _ = batch
 
-    questions_var = Variable(questions.cuda(), volatile=True)
-    feats_var = Variable(feats.cuda(), volatile=True)
-    answers_var = Variable(feats.cuda(), volatile=True)
+    questions_var = tf.Variable(questions.cuda(), volatile=True)
+    feats_var = tf.Variable(feats.cuda(), volatile=True)
+    answers_var = tf.Variable(feats.cuda(), volatile=True)
     if programs[0] is not None:
-      programs_var = Variable(programs.cuda(), volatile=True)
+      programs_var = tf.Variable(programs.cuda(), volatile=True)
 
     scores = None # Use this for everything but PG
     if args.model_type == 'PG':
       vocab = utils.load_vocab(args.vocab_json)
       for i in range(questions.size(0)):
-        program_pred = program_generator.sample(Variable(questions[i:i+1].cuda(), volatile=True))
+        program_pred = program_generator.sample(tf.Variable(questions[i:i+1].cuda(), volatile=True))
         program_pred_str = iep.preprocess.decode(program_pred, vocab['program_idx_to_token'])
         program_str = iep.preprocess.decode(programs[i], vocab['program_idx_to_token'])
         if program_pred_str == program_str:
