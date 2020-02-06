@@ -184,7 +184,7 @@ class Seq2Seq(tf.Module):
                 cur_output = probs.multinomial()  # Now N x 1
             self.multinomial_outputs.append(cur_output)
             self.multinomial_probs.append(probs)
-            cur_output_data = cur_output.data.cpu()
+            cur_output_data = cur_output.data
             not_done = logical_not(done)
             y[:, t][not_done] = cur_output_data[not_done]
             done = logical_or(done, cur_output_data.cpu() == self.END)
