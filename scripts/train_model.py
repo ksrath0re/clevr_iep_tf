@@ -243,75 +243,75 @@ def train_loop(args, train_loader, val_loader):
                   verbose=0,
                   callbacks=[LossAndErrorPrintingCallback(), checkpoint])
 
-            elif args.model_type == 'PG+EE':
-                programs_pred = program_generator.reinforce_sample(questions_var)
-                scores = execution_engine(feats_var, programs_pred)
+            # elif args.model_type == 'PG+EE':
+            #     programs_pred = program_generator.reinforce_sample(questions_var)
+            #     scores = execution_engine(feats_var, programs_pred)
+            #
+            #     loss = tf.nn.softmax_cross_entropy_with_logits(scores, answers_var)
+            #     _, preds = scores.data.max(1)
+            #     # raw_reward = (preds == answers).float()
+            #     raw_reward = tf.cast((preds == answers), dtype=tf.float32)
+            #     reward_moving_average *= args.reward_decay
+            #     reward_moving_average += (1.0 - args.reward_decay) * raw_reward.mean()
+            #     centered_reward = raw_reward - reward_moving_average
+            #
+            #     if args.train_execution_engine == 1:
+            #         ee_optimizer.zero_grad()
+            #         loss.backward()
+            #         ee_optimizer.step()
+            #
+            #     if args.train_program_generator == 1:
+            #         pg_optimizer.zero_grad()
+            #         program_generator.reinforce_backward(centered_reward.cuda())
+            #         pg_optimizer.step()
 
-                loss = tf.nn.softmax_cross_entropy_with_logits(scores, answers_var)
-                _, preds = scores.data.max(1)
-                # raw_reward = (preds == answers).float()
-                raw_reward = tf.cast((preds == answers), dtype=tf.float32)
-                reward_moving_average *= args.reward_decay
-                reward_moving_average += (1.0 - args.reward_decay) * raw_reward.mean()
-                centered_reward = raw_reward - reward_moving_average
-
-                if args.train_execution_engine == 1:
-                    ee_optimizer.zero_grad()
-                    loss.backward()
-                    ee_optimizer.step()
-
-                if args.train_program_generator == 1:
-                    pg_optimizer.zero_grad()
-                    program_generator.reinforce_backward(centered_reward.cuda())
-                    pg_optimizer.step()
-
-            if t % args.record_loss_every == 0:
-                print(t, loss.data[0])
-                stats['train_losses'].append(loss.data[0])
-                stats['train_losses_ts'].append(t)
-                if reward is not None:
-                    stats['train_rewards'].append(reward)
-
-            if t % args.checkpoint_every == 0:
-                print('Checking training accuracy ... ')
-                train_acc = check_accuracy(args, program_generator, execution_engine,
-                                           baseline_model, train_loader)
-                print('train accuracy is', train_acc)
-                print('Checking validation accuracy ...')
-                val_acc = check_accuracy(args, program_generator, execution_engine,
-                                         baseline_model, val_loader)
-                print('val accuracy is ', val_acc)
-                stats['train_accs'].append(train_acc)
-                stats['val_accs'].append(val_acc)
-                stats['val_accs_ts'].append(t)
-
-                if val_acc > stats['best_val_acc']:
-                    stats['best_val_acc'] = val_acc
-                    stats['model_t'] = t
-                    best_pg_state = get_state(program_generator)
-                    best_ee_state = get_state(execution_engine)
-                    best_baseline_state = get_state(baseline_model)
-
-                checkpoint = {
-                    'args': args.__dict__,
-                    'program_generator_kwargs': pg_kwargs,
-                    'program_generator_state': best_pg_state,
-                    'execution_engine_kwargs': ee_kwargs,
-                    'execution_engine_state': best_ee_state,
-                    'baseline_kwargs': baseline_kwargs,
-                    'baseline_state': best_baseline_state,
-                    'baseline_type': baseline_type,
-                    'vocab': vocab
-                }
-                for k, v in stats.items():
-                    checkpoint[k] = v
-                print('Saving checkpoint to %s' % args.checkpoint_path)
-                torch.save(checkpoint, args.checkpoint_path)
-                del checkpoint['program_generator_state']
-                del checkpoint['execution_engine_state']
-                del checkpoint['baseline_state']
-                with open(args.checkpoint_path + '.json', 'w') as f:
-                    json.dump(checkpoint, f)
+            # if t % args.record_loss_every == 0:
+            #     print(t, loss.data[0])
+            #     stats['train_losses'].append(loss.data[0])
+            #     stats['train_losses_ts'].append(t)
+            #     if reward is not None:
+            #         stats['train_rewards'].append(reward)
+            #
+            # if t % args.checkpoint_every == 0:
+            #     print('Checking training accuracy ... ')
+            #     train_acc = check_accuracy(args, program_generator, execution_engine,
+            #                                baseline_model, train_loader)
+            #     print('train accuracy is', train_acc)
+            #     print('Checking validation accuracy ...')
+            #     val_acc = check_accuracy(args, program_generator, execution_engine,
+            #                              baseline_model, val_loader)
+            #     print('val accuracy is ', val_acc)
+            #     stats['train_accs'].append(train_acc)
+            #     stats['val_accs'].append(val_acc)
+            #     stats['val_accs_ts'].append(t)
+            #
+            #     if val_acc > stats['best_val_acc']:
+            #         stats['best_val_acc'] = val_acc
+            #         stats['model_t'] = t
+            #         best_pg_state = get_state(program_generator)
+            #         best_ee_state = get_state(execution_engine)
+            #         best_baseline_state = get_state(baseline_model)
+            #
+            #     checkpoint = {
+            #         'args': args.__dict__,
+            #         'program_generator_kwargs': pg_kwargs,
+            #         'program_generator_state': best_pg_state,
+            #         'execution_engine_kwargs': ee_kwargs,
+            #         'execution_engine_state': best_ee_state,
+            #         'baseline_kwargs': baseline_kwargs,
+            #         'baseline_state': best_baseline_state,
+            #         'baseline_type': baseline_type,
+            #         'vocab': vocab
+            #     }
+            #     for k, v in stats.items():
+            #         checkpoint[k] = v
+            #     print('Saving checkpoint to %s' % args.checkpoint_path)
+            #     torch.save(checkpoint, args.checkpoint_path)
+            #     del checkpoint['program_generator_state']
+            #     del checkpoint['execution_engine_state']
+            #     del checkpoint['baseline_state']
+            #     with open(args.checkpoint_path + '.json', 'w') as f:
+            #         json.dump(checkpoint, f)
 
             if t == args.num_iterations:
                 break
