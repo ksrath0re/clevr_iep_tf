@@ -205,23 +205,17 @@ def train_loop(args, train_loader, val_loader):
 
       reward = None
       if args.model_type == 'PG':
-        # Train program generator with ground-truth programs
-        pg_optimizer.zero_grad()
+        # Train program generator with ground-truth programs+++
         loss = program_generator(questions_var, programs_var)
-        loss.backward()
-        pg_optimizer.step()
       elif args.model_type == 'EE':
         # Train execution engine with ground-truth programs
-        ee_optimizer.zero_grad()
         scores = execution_engine(feats_var, programs_var)
-        loss = loss_fn(scores, answers_var)
-        loss.backward()
-        ee_optimizer.step()
+        loss = tf.nn.softmax_cross_entropy_with_logits(scores, answers_var)
       elif args.model_type == 'PG+EE':
         programs_pred = program_generator.reinforce_sample(questions_var)
         scores = execution_engine(feats_var, programs_pred)
 
-        loss = loss_fn(scores, answers_var)
+        loss = tf.nn.softmax_cross_entropy_with_logits(scores, answers_var)
         _, preds = scores.data.cpu().max(1)
         raw_reward = (preds == answers).float()
         reward_moving_average *= args.reward_decay
