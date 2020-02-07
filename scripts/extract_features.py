@@ -10,6 +10,9 @@ import numpy as np
 from scipy.misc import imread, imresize
 import tensorflow as tf
 import tensorflow_hub as hub
+from PIL import ImageFile
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input_image_dir', required=True)
@@ -24,16 +27,12 @@ parser.add_argument('--model_stage', default=3, type=int)
 parser.add_argument('--batch_size', default=128, type=int)
 
 
-def build_model(args):
+def build_model(args, img_size):
     if not 'resnet' in args.model:
         raise ValueError('Feature extraction only supports ResNets')
-    layers = tf.keras.Model([
-        hub.KerasLayer("https://tfhub.dev/google/imagenet/resnet_v2_101/classification/4", trainable=False, arguments=dict(batch_norm_momentum=0.997))
-    ])
-    piece_to_share = tf.keras.Model(layers)
-
-    full_model = tf.keras.Sequential([piece_to_share])
-    #model.build([None, 224, 224, 3])
+    print("Fetching resnet model .....")
+    full_model = tf.keras.applications.ResNet101(input_shape=img_size, include_top=False, weights='imagenet')
+    print(full_model.summary())
     return full_model
 
 
@@ -45,12 +44,11 @@ def run_batch(cur_batch, model):
     image_batch = tf.convert_to_tensor(image_batch)
 
     '''Pass the input batch to the model to obtain the features'''
+    image_batch = tf.reshape(image_batch, [128, -1, 224, 3])
+    
     features = model(image_batch)
 
-    '''
-    eval method helps in returning the actual value contained within the tensor
-    '''
-    return eval(features)
+    return features
 
 
 def main(args):
@@ -68,10 +66,10 @@ def main(args):
         input_paths = input_paths[:args.max_images]
     print(input_paths[0])
     print(input_paths[-1])
+    img_size = (args.image_height, args.image_width, 3)
+    model = build_model(args, img_size)
 
-    model = build_model(args)
-
-    img_size = (args.image_height, args.image_width)
+    
     with h5py.File(args.output_h5_file, 'w') as f:
         feat_dset = None
         i0 = 0
