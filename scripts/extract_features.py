@@ -35,18 +35,19 @@ def build_model(args):
 
 
 def run_batch(cur_batch, model):
-    mean = np.array([0.485, 0.456, 0.406]).reshape(1, 3, 1, 1)
-    std = np.array([0.229, 0.224, 0.224]).reshape(1, 3, 1, 1)
-
     image_batch = np.concatenate(cur_batch, 0).astype(np.float32)
-    image_batch = (image_batch / 255.0 - mean) / std
-    image_batch = tf.Tensor(image_batch).cuda()
-    image_batch = tf.Variable(image_batch)
 
-    feats = model(image_batch)
-    feats = feats.data.cpu().clone().numpy()
+    '''Normalise the input RGB image batch'''
+    image_batch = tf.keras.utils.normalize(image_batch)
+    image_batch = tf.convert_to_tensor(image_batch)
 
-    return feats
+    '''Pass the input batch to the model to obtain the features'''
+    features = model(image_batch)
+
+    '''
+    eval method helps in returning the actual value contained within the tensor
+    '''
+    return eval(features)
 
 
 def main(args):
@@ -59,7 +60,7 @@ def main(args):
         idx_set.add(idx)
     input_paths.sort(key=lambda x: x[1])
     assert len(idx_set) == len(input_paths)
-    assert min(idx_set) == 0 and max(idx_set) == len(idx_set) - 1
+    #assert min(idx_set) == 0 and max(idx_set) == len(idx_set) - 1
     if args.max_images is not None:
         input_paths = input_paths[:args.max_images]
     print(input_paths[0])
