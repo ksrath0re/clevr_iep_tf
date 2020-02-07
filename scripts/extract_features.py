@@ -27,11 +27,14 @@ parser.add_argument('--batch_size', default=128, type=int)
 def build_model(args):
     if not 'resnet' in args.model:
         raise ValueError('Feature extraction only supports ResNets')
-    model = tf.keras.Sequential([
-        hub.KerasLayer("https://tfhub.dev/google/imagenet/resnet_v2_101/classification/4")
+    layers = tf.keras.Model([
+        hub.KerasLayer("https://tfhub.dev/google/imagenet/resnet_v2_101/classification/4", trainable=False, arguments=dict(batch_norm_momentum=0.997))
     ])
-    model.build([None, 224, 224, 3])
-    return model
+    piece_to_share = tf.keras.Model(layers)
+
+    full_model = tf.keras.Sequential([piece_to_share])
+    #model.build([None, 224, 224, 3])
+    return full_model
 
 
 def run_batch(cur_batch, model):
