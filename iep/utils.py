@@ -10,9 +10,8 @@ import tensorflow as tf
 # LICENSE file in the root directory of this source tree.
 
 import json
-import torch
 
-from iep.models import ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel
+from iep.models.seq2seq import Seq2Seq
 
 
 def invert_dict(d):

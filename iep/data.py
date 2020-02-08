@@ -14,16 +14,16 @@ import iep.programs
 import collections
 import collections.abc
 
-numpy_type_map = {
-    'float64': torch.DoubleTensor,
-    'float32': torch.FloatTensor,
-    'float16': torch.HalfTensor,
-    'int64': torch.LongTensor,
-    'int32': torch.IntTensor,
-    'int16': torch.ShortTensor,
-    'int8': torch.CharTensor,
-    'uint8': torch.ByteTensor,
-}
+#numpy_type_map = {
+#    'float64': torch.DoubleTensor,
+#    'float32': torch.FloatTensor,
+#    'float16': torch.HalfTensor,
+#    'int64': torch.LongTensor,
+#    'int32': torch.IntTensor,
+#    'int16': torch.ShortTensor,
+#    'int8': torch.CharTensor,
+#    'uint8': torch.ByteTensor,
+#}
 
 
 class Dataset(object):

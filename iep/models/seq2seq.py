@@ -13,7 +13,7 @@
 # from torch.autograd import Variable
 
 import tensorflow as tf
-import tensorflow.nn as nn
+#import tensorflow.nn as nn
 
 from iep.embedding import expand_embedding_vocab
 

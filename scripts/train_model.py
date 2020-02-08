@@ -17,14 +17,13 @@ import shutil
 # import torch
 # torch.backends.cudnn.enabled = True
 # from torch.autograd import Variable
-import torch.nn.functional as F
 import numpy as np
 import h5py
 import tensorflow as tf
 import iep.utils as utils
 import iep.preprocess
 from iep.data import ClevrDataset, ClevrDataLoader
-from iep.models import ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel
+from iep.models.seq2seq import Seq2Seq
 from tensorflow.keras import optimizers
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.callbacks import EarlyStopping, Callback, ModelCheckpoint
