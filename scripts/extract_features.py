@@ -4,7 +4,9 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import argparse, os, json
+import argparse
+import os
+import json
 import h5py
 import numpy as np
 from scipy.misc import imread, imresize
@@ -28,11 +30,12 @@ parser.add_argument('--batch_size', default=128, type=int)
 
 
 def build_model(args, img_size):
-    if not 'resnet' in args.model:
+    if 'resnet' not in args.model:
         raise ValueError('Feature extraction only supports ResNets')
     print("Fetching resnet model .....")
-    full_model = tf.keras.applications.ResNet101(input_shape=img_size, include_top=False, weights='imagenet')
-    print(full_model.summary())
+    full_model = tf.keras.applications.ResNet101(
+        input_shape=img_size, include_top=False, weights='imagenet')
+    #print(full_model.summary())
     return full_model
 
 
@@ -44,8 +47,13 @@ def run_batch(cur_batch, model):
     image_batch = tf.convert_to_tensor(image_batch)
 
     '''Pass the input batch to the model to obtain the features'''
-    image_batch = tf.reshape(image_batch, [128, -1, 224, 3])
-    
+    if image_batch.shape[0] == 128:
+        image_batch = tf.reshape(image_batch, [128, -1, 224, 3])
+    else:
+        image_batch = tf.reshape(
+            image_batch, [
+                image_batch.shape[0], -1, 224, 3])
+
     features = model(image_batch)
 
     return features
@@ -55,7 +63,8 @@ def main(args):
     input_paths = []
     idx_set = set()
     for fn in os.listdir(args.input_image_dir):
-        if not fn.endswith('.png'): continue
+        if not fn.endswith('.png'):
+            continue
         idx = int(os.path.splitext(fn)[0].split('_')[-1])
         input_paths.append((os.path.join(args.input_image_dir, fn), idx))
         idx_set.add(idx)
@@ -69,7 +78,6 @@ def main(args):
     img_size = (args.image_height, args.image_width, 3)
     model = build_model(args, img_size)
 
-    
     with h5py.File(args.output_h5_file, 'w') as f:
         feat_dset = None
         i0 = 0
