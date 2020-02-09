@@ -92,7 +92,7 @@ def get_data(dataloader):
         image = dataloader.image_h5['images'][image_idx]
 
     features = []
-    for i in image_idx:
+    for i in range(len(dataloader.feature_h5['features'])):
         features.append(dataloader.feature_h5['features'][i])
     features = np.asarray(features, dtype=np.float32)
 

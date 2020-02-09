@@ -22,7 +22,7 @@ import h5py
 import tensorflow as tf
 import iep.utils as utils
 import iep.preprocess
-from iep.data import ClevrDataset, ClevrDataLoader
+from iep.data import  ClevrDataLoader, get_data
 from iep.models.seq2seq import Seq2Seq
 from tensorflow.keras import optimizers
 from tensorflow.keras.utils import to_categorical
@@ -38,7 +38,7 @@ parser.add_argument('--val_features_h5', default='data/val_features.h5')
 parser.add_argument('--feature_dim', default='1024,14,14')
 parser.add_argument('--vocab_json', default='data/vocab.json')
 
-parser.add_argument('--loader_num_workers', type=int, default=1)
+parser.add_argument('--loader_num_workers', type=int, default=0)
 parser.add_argument('--use_local_copies', default=0, type=int)
 parser.add_argument('--cleanup_local_copies', default=1, type=int)
 
@@ -154,9 +154,9 @@ def main(args):
         'num_workers': args.loader_num_workers,
     }
 
-    with ClevrDataLoader(**train_loader_kwargs) as train_loader, \
-            ClevrDataLoader(**val_loader_kwargs) as val_loader:
-        train_loop(args, train_loader, val_loader)
+    train_loader = ClevrDataLoader(**train_loader_kwargs)
+    val_loader = ClevrDataLoader(**val_loader_kwargs)
+    train_loop(args, train_loader, val_loader)
 
     if args.use_local_copies == 1 and args.cleanup_local_copies == 1:
         os.remove('/tmp/train_questions.h5')
@@ -201,13 +201,18 @@ def train_loop(args, train_loader, val_loader):
 
     # set_mode('train', [program_generator, execution_engine, baseline_model])
 
-    print('train_loader has %d samples' % len(train_loader.dataset))
-    print('val_loader has %d samples' % len(val_loader.dataset))
+    print('train_loader has %d samples' % len(train_loader))
+    print('val_loader has %d samples' % len(val_loader))
 
+    
     while t < args.num_iterations:
         epoch += 1
         print('Starting epoch %d' % epoch)
-        for batch in train_loader:
+        train_loader_data = get_data(train_loader)
+        print("train data loader length :", len(train_loader_data))
+        print(train_loader_data.shape)
+        print(train_loader_data[0])
+        for batch in train_loader_data:
             t += 1
             questions, _, feats, answers, programs, _ = batch
             questions_var = tf.Variable(questions)
