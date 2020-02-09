@@ -33,13 +33,15 @@ class Seq2Seq(tf.Module):
                  ):
 
         self.encoder_embed = tf.keras.layers.Embedding(encoder_vocab_size, wordvec_dim)
-        cells = [tf.keras.layers.LSTMCell(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)]
-        self.encoder_rnn = tf.keras.layers.StackedRNNCells(cells)
+        encoder_cells = [tf.keras.layers.LSTMCell(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)]
+        self.encoder_rnn = tf.keras.layers.StackedRNNCells(encoder_cells)
         #    tf.keras.layers.LSTM(wordvec_dim, hidden_dim, rnn_num_layers,
         #                                        dropout=rnn_dropout, batch_first=True)
         self.decoder_embed = tf.keras.layers.Embedding(decoder_vocab_size, wordvec_dim)
-        self.decoder_rnn = tf.keras.layers.LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
-                                                dropout=rnn_dropout, batch_first=True)
+        decoder_cells = [tf.keras.layers.LSTMCell(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)]
+        self.decoder_rnn = tf.keras.layers.StackedRNNCells(decoder_cells, input_shape=(wordvec_dim + hidden_dim,))
+        #    LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
+        #                                        dropout=rnn_dropout, batch_first=True)
         self.decoder_linear = tf.keras.layers.Dense(decoder_vocab_size, input_shape=(hidden_dim,))
         self.NULL = null_token
         self.START = start_token
