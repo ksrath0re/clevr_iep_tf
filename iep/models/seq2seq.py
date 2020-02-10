@@ -57,7 +57,7 @@ class Seq2Seq(tf.Module):
         V_in = self.encoder_embed.input_dim
         V_out = self.decoder_embed.input_dim
         D = self.encoder_embed.output_dim
-        H = self.hidden_dim
+        H = self.hidden_size
         L = self.num_layers
 
         N = x.shape(0) if x is not None else None

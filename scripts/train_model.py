@@ -210,7 +210,7 @@ def train_loop(args, train_loader, val_loader):
         print('Starting epoch %d' % epoch)
         train_loader_data = get_data(train_loader)
         print("train data loader length :", len(train_loader_data))
-        print(train_loader_data.shape)
+        print(train_loader_data[0].shape)
         print(train_loader_data[0])
         for batch in train_loader_data:
             t += 1
