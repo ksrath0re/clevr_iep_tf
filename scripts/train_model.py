@@ -214,7 +214,7 @@ def train_loop(args, train_loader, val_loader):
         print(train_loader_data[0])
         for batch in train_loader_data:
             t += 1
-            questions, _, feats, answers, programs, _ = batch
+            questions, _, feats, answers, programs, _ = batch[0], batch[1], batch[2], batch[3], batch[4], batch[5]
             questions_var = tf.Variable(questions)
             feats_var = tf.Variable(feats)
             answers_var = tf.Variable(answers)
