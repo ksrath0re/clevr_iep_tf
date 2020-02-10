@@ -22,7 +22,7 @@ import h5py
 import tensorflow as tf
 import iep.utils as utils
 import iep.preprocess
-from iep.data import  ClevrDataLoader, get_data
+from iep.data import  ClevrDataLoader
 from iep.models.seq2seq import Seq2Seq
 from tensorflow.keras import optimizers
 from tensorflow.keras.utils import to_categorical
@@ -208,11 +208,11 @@ def train_loop(args, train_loader, val_loader):
     while t < args.num_iterations:
         epoch += 1
         print('Starting epoch %d' % epoch)
-        train_loader_data = get_data(train_loader)
-        print("train data loader length :", len(train_loader_data))
-        print(train_loader_data[0].shape)
-        print(train_loader_data[0])
-        for batch in train_loader_data:
+        #train_loader_data = get_data(train_loader)
+        #print("train data loader length :", len(train_loader_data))
+        #print(train_loader[0].shape)
+        #print(train_loader[0])
+        for batch in train_loader:
             t += 1
             questions, _, feats, answers, programs, _ = batch[0], batch[1], batch[2], batch[3], batch[4], batch[5]
             questions_var = tf.Variable(questions)

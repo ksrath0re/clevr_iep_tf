@@ -42,6 +42,7 @@ class ClevrDataLoader:
         question_h5_path = kwargs.pop('question_h5')
         print('Reading questions from ', question_h5_path)
         self.question_h5 = h5py.File(question_h5_path, 'r')
+        mask = None
 
         question_families = kwargs.pop('question_families', None)
         if question_families is not None:
@@ -116,4 +117,4 @@ class ClevrDataLoader:
             elif self.mode == 'postfix':
                 program_json = programs.postfix_to_list(program_json_seq)
 
-        return question, image, features, answer, program_seq, program_json
+        return (question, image, features, answer, program_seq, program_json)
