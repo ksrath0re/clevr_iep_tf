@@ -31,12 +31,13 @@ class Seq2Seq(tf.Module):
                  end_token=2,
                  encoder_embed=None
                  ):
-
+        self.hidden_size = hidden_dim
+        self.num_layers = rnn_num_layers
         self.encoder_embed = tf.keras.layers.Embedding(encoder_vocab_size, wordvec_dim)
         encoder_cells = [tf.keras.layers.LSTMCell(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)]
         self.encoder_rnn = tf.keras.layers.StackedRNNCells(encoder_cells)
         #    tf.keras.layers.LSTM(wordvec_dim, hidden_dim, rnn_num_layers,
-        #                                        dropout=rnn_dropout, batch_first=True)
+        #                                        dropout=rnnq_dropout, batch_first=True)
         self.decoder_embed = tf.keras.layers.Embedding(decoder_vocab_size, wordvec_dim)
         decoder_cells = [tf.keras.layers.LSTMCell(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)]
         self.decoder_rnn = tf.keras.layers.StackedRNNCells(decoder_cells, input_shape=(wordvec_dim + hidden_dim,))
@@ -53,11 +54,11 @@ class Seq2Seq(tf.Module):
                                word2vec=word2vec, std=std)
 
     def get_dims(self, x=None, y=None):
-        V_in = self.encoder_embed.num_embeddings
-        V_out = self.decoder_embed.num_embeddings
-        D = self.encoder_embed.embedding_dim
-        H = self.encoder_rnn.hidden_size
-        L = self.encoder_rnn.num_layers
+        V_in = self.encoder_embed.input_dim
+        V_out = self.decoder_embed.input_dim
+        D = self.encoder_embed.output_dim
+        H = self.hidden_dim
+        L = self.num_layers
 
         N = x.shape(0) if x is not None else None
         N = y.shape(0) if N is None and y is not None else N
