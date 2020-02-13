@@ -22,7 +22,7 @@ import h5py
 import tensorflow as tf
 import iep.utils as utils
 import iep.preprocess
-from iep.data import  ClevrDataLoader
+from iep.data import ClevrDataLoader
 from iep.models.seq2seq import Seq2Seq
 from tensorflow.keras import optimizers
 from tensorflow.keras.utils import to_categorical
@@ -48,8 +48,16 @@ parser.add_argument('--num_val_samples', default=10000, type=int)
 parser.add_argument('--shuffle_train_data', default=1, type=int)
 
 # What type of model to use and which parts to train
-parser.add_argument('--model_type', default='PG+EE',
-                    choices=['PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA'])
+parser.add_argument(
+    '--model_type',
+    default='PG+EE',
+    choices=[
+        'PG',
+        'EE',
+        'PG+EE',
+        'LSTM',
+        'CNN+LSTM',
+        'CNN+LSTM+SA'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -165,6 +173,31 @@ def main(args):
         os.remove('/tmp/val_features.h5')
 
 
+def batch_creater(data, batch_size, drop_last):
+    q, a, f, ans, pro, l = ([] for i in range(6))
+    batch = (q, a, f, ans, pro, l)
+    j = 0
+    big_batch = []
+    print("Length of data set : ", len(data))
+    #print("Batch Size : ", batch_size)
+    for i in range(len(data)):
+        for k in range(6):
+            batch[k].append(data[i][k])
+        if len(batch[0]) == batch_size:
+            big_batch.append(batch)
+            q, a, f, ans, pro, l = ([] for i in range(6))
+            batch = (q, a, f, ans, pro, l)
+            j += 1
+    if len(batch) > 0 and not drop_last:
+        big_batch.append(batch)
+    print("Batching Completed.")
+    return big_batch
+
+
+def to_tensor(nd_array):
+    return tf.convert_to_tensor(nd_array, dtype=tf.float32)
+
+
 def train_loop(args, train_loader, val_loader):
     vocab = utils.load_vocab(args.vocab_json)
     program_generator, pg_kwargs, pg_optimizer = None, None, None
@@ -185,6 +218,7 @@ def train_loop(args, train_loader, val_loader):
         program_generator, pg_kwargs = get_program_generator(args)
         pg_optimizer = optimizers.Adam(args.learning_rate)
         print('Here is the program generator:')
+        # program_generator.build(input_shape=[46,])
         print(program_generator)
     if args.model_type == 'EE' or args.model_type == 'PG+EE':
         execution_engine, ee_kwargs = get_execution_engine(args)
@@ -198,23 +232,37 @@ def train_loop(args, train_loader, val_loader):
         'best_val_acc': -1, 'model_t': 0,
     }
     t, epoch, reward_moving_average = 0, 0, 0
+    batch_size = 64
 
     # set_mode('train', [program_generator, execution_engine, baseline_model])
 
     print('train_loader has %d samples' % len(train_loader))
     print('val_loader has %d samples' % len(val_loader))
-
-    
+    # data_sampler = iter(range(len(train_loader)))
+    data_load = batch_creater(train_loader, batch_size, False)
+    print("Data load length :", len(data_load))
+    # print(data_load[0][0])
     while t < args.num_iterations:
         epoch += 1
         print('Starting epoch %d' % epoch)
-        #train_loader_data = get_data(train_loader)
-        #print("train data loader length :", len(train_loader_data))
-        #print(train_loader[0].shape)
-        #print(train_loader[0])
-        for batch in train_loader:
+        # train_loader_data = get_data(train_loader)
+        # print("train data loader length :", len(train_loader_data))
+        # print(train_loader[0].shape)
+        # print(train_loader[0])
+        for batch in data_load:
             t += 1
-            questions, _, feats, answers, programs, _ = batch[0], batch[1], batch[2], batch[3], batch[4], batch[5]
+            questions, _, feats, answers, programs, _ = to_tensor(
+                batch[0]), batch[1], to_tensor(
+                batch[2]), to_tensor(
+                batch[3]), to_tensor(
+                batch[4]), batch[5]
+
+            print("Questions : ", questions.shape)
+            print("Features :", feats.shape)
+            print(" Answers : ", answers.shape)
+            print(" prgrams : ", programs.shape)
+            print("----------------")
+
             questions_var = tf.Variable(questions)
             feats_var = tf.Variable(feats)
             answers_var = tf.Variable(answers)
@@ -237,15 +285,16 @@ def train_loop(args, train_loader, val_loader):
             elif args.model_type == 'EE':
                 # Train execution engine with ground-truth programs
                 scores = execution_engine(feats_var, programs_var)
-                loss = tf.nn.softmax_cross_entropy_with_logits(scores, answers_var)
+                loss = tf.nn.softmax_cross_entropy_with_logits(
+                    scores, answers_var)
                 execution_engine.compile(optimizer=ee_optimizer, loss=loss)
                 history = execution_engine.fit(
-                  questions_var,
-                  to_categorical(answers_var),
-                  batch_size=args.batch_size,
-                  epochs=10,
-                  verbose=0,
-                  callbacks=[LossAndErrorPrintingCallback(), checkpoint])
+                    questions_var,
+                    to_categorical(answers_var),
+                    batch_size=args.batch_size,
+                    epochs=10,
+                    verbose=0,
+                    callbacks=[LossAndErrorPrintingCallback(), checkpoint])
 
             # elif args.model_type == 'PG+EE':
             #     programs_pred = program_generator.reinforce_sample(questions_var)
@@ -433,12 +482,20 @@ def get_baseline_model(args):
 def set_mode(mode, models):
     assert mode in ['train', 'eval']
     for m in models:
-        if m is None: continue
-        if mode == 'train': m.train()
-        if mode == 'eval': m.eval()
+        if m is None:
+            continue
+        if mode == 'train':
+            m.train()
+        if mode == 'eval':
+            m.eval()
 
 
-def check_accuracy(args, program_generator, execution_engine, baseline_model, loader):
+def check_accuracy(
+        args,
+        program_generator,
+        execution_engine,
+        baseline_model,
+        loader):
     set_mode('eval', [program_generator, execution_engine, baseline_model])
     num_correct, num_samples = 0, 0
     for batch in loader:
@@ -454,9 +511,12 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
         if args.model_type == 'PG':
             vocab = utils.load_vocab(args.vocab_json)
             for i in range(questions.size(0)):
-                program_pred = program_generator.sample(tf.Variable(questions[i:i + 1].cuda(), volatile=True))
-                program_pred_str = iep.preprocess.decode(program_pred, vocab['program_idx_to_token'])
-                program_str = iep.preprocess.decode(programs[i], vocab['program_idx_to_token'])
+                program_pred = program_generator.sample(
+                    tf.Variable(questions[i:i + 1].cuda(), volatile=True))
+                program_pred_str = iep.preprocess.decode(
+                    program_pred, vocab['program_idx_to_token'])
+                program_str = iep.preprocess.decode(
+                    programs[i], vocab['program_idx_to_token'])
                 if program_pred_str == program_str:
                     num_correct += 1
                 num_samples += 1

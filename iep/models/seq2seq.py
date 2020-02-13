@@ -18,7 +18,7 @@ import tensorflow as tf
 from iep.embedding import expand_embedding_vocab
 
 
-class Seq2Seq(tf.Module):
+class Seq2Seq(tf.keras.Model):
     def __init__(self,
                  encoder_vocab_size=100,
                  decoder_vocab_size=100,
@@ -31,19 +31,31 @@ class Seq2Seq(tf.Module):
                  end_token=2,
                  encoder_embed=None
                  ):
+        super(Seq2Seq, self).__init__()
         self.hidden_size = hidden_dim
         self.num_layers = rnn_num_layers
-        self.encoder_embed = tf.keras.layers.Embedding(encoder_vocab_size, wordvec_dim)
-        encoder_cells = [tf.keras.layers.LSTMCell(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)]
+       
+        self.encoder_embed = tf.keras.layers.Embedding(
+            encoder_vocab_size, wordvec_dim)
+        encoder_cells = [
+            tf.keras.layers.LSTMCell(
+                hidden_dim,
+                dropout=rnn_dropout) for _ in range(rnn_num_layers)]
         self.encoder_rnn = tf.keras.layers.StackedRNNCells(encoder_cells)
         #    tf.keras.layers.LSTM(wordvec_dim, hidden_dim, rnn_num_layers,
-        #                                        dropout=rnnq_dropout, batch_first=True)
-        self.decoder_embed = tf.keras.layers.Embedding(decoder_vocab_size, wordvec_dim)
-        decoder_cells = [tf.keras.layers.LSTMCell(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)]
-        self.decoder_rnn = tf.keras.layers.StackedRNNCells(decoder_cells, input_shape=(wordvec_dim + hidden_dim,))
+        # dropout=rnnq_dropout, batch_first=True)
+        self.decoder_embed = tf.keras.layers.Embedding(
+            decoder_vocab_size, wordvec_dim)
+        decoder_cells = [
+            tf.keras.layers.LSTMCell(
+                hidden_dim,
+                dropout=rnn_dropout) for _ in range(rnn_num_layers)]
+        self.decoder_rnn = tf.keras.layers.StackedRNNCells(
+            decoder_cells, input_shape=(wordvec_dim + hidden_dim,))
         #    LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
-        #                                        dropout=rnn_dropout, batch_first=True)
-        self.decoder_linear = tf.keras.layers.Dense(decoder_vocab_size, input_shape=(hidden_dim,))
+        # dropout=rnn_dropout, batch_first=True)
+        self.decoder_linear = tf.keras.layers.Dense(
+            decoder_vocab_size, input_shape=(hidden_dim,))
         self.NULL = null_token
         self.START = start_token
         self.END = end_token
@@ -60,10 +72,10 @@ class Seq2Seq(tf.Module):
         H = self.hidden_size
         L = self.num_layers
 
-        N = x.shape(0) if x is not None else None
+        N = tf.shape(x)[0] if x is not None else None
         N = y.shape(0) if N is None and y is not None else N
-        T_in = x.shape(1) if x is not None else None
-        T_out = y.reshape(1, -1).shape(1) if not y is None else None
+        T_in = tf.shape(x)[1] if x is not None else None
+        T_out = y.reshape(1, -1).shape(1) if y is not None else None
         return V_in, V_out, D, H, L, N, T_in, T_out
 
     def before_rnn(self, x, replace=0):
@@ -77,7 +89,9 @@ class Seq2Seq(tf.Module):
         x_cpu = x.cpu()
         for i in range(N):
             for t in range(T - 1):
-                if x_cpu.data[i, t] != self.NULL and x_cpu.data[i, t + 1] == self.NULL:
+                if x_cpu.data[i,
+                              t] != self.NULL and x_cpu.data[i,
+                                                             t + 1] == self.NULL:
                     idx[i] = t
                     break
         idx = tf.dtypes.cast(idx, dtype=tf.int64)
@@ -88,8 +102,20 @@ class Seq2Seq(tf.Module):
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
         x, idx = self.before_rnn(x)
         embed = self.encoder_embed(x)
-        h0 = tf.dtypes.cast(tf.Variable(tf.zeros(L, N, H), dtype=embed.data.dtype))
-        c0 = tf.dtypes.cast(tf.Variable(tf.zeros(L, N, H), dtype=embed.data.dtype))
+        h0 = tf.dtypes.cast(
+            tf.Variable(
+                tf.zeros(
+                    L,
+                    N,
+                    H),
+                dtype=embed.data.dtype))
+        c0 = tf.dtypes.cast(
+            tf.Variable(
+                tf.zeros(
+                    L,
+                    N,
+                    H),
+                dtype=embed.data.dtype))
 
         out, _ = self.encoder_rnn(embed, (h0, c0))
 
@@ -107,13 +133,26 @@ class Seq2Seq(tf.Module):
         encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
         rnn_input = tf.concat([encoded_repeat, y_embed], 2)
         if h0 is None:
-            h0 = tf.dtypes.cast(tf.Variable(tf.zeros(L, N, H), dtype=encoded.data.dtype))
+            h0 = tf.dtypes.cast(
+                tf.Variable(
+                    tf.zeros(
+                        L,
+                        N,
+                        H),
+                    dtype=encoded.data.dtype))
         if c0 is None:
-            c0 = tf.dtypes.cast(tf.Variable(tf.zeros(L, N, H), dtype=encoded.data.dtype))
+            c0 = tf.dtypes.cast(
+                tf.Variable(
+                    tf.zeros(
+                        L,
+                        N,
+                        H),
+                    dtype=encoded.data.dtype))
         rnn_output, (ht, ct) = self.decoder_rnn(rnn_input, (h0, c0))
 
         rnn_output_2d = rnn_output.contiguous().view(N * T_out, H)
-        output_logprobs = self.decoder_linear(rnn_output_2d).view(N, T_out, V_out)
+        output_logprobs = self.decoder_linear(
+            rnn_output_2d).view(N, T_out, V_out)
 
         return output_logprobs, ht, ct
 
@@ -160,7 +199,8 @@ class Seq2Seq(tf.Module):
         y = [self.START]
         h0, c0 = None, None
         while True:
-            cur_y_tf = tf.dtypes.cast(tf.convert_to_tensor([y[-1]]).reshape(1, 1), dtype=x.data.dtype)
+            cur_y_tf = tf.dtypes.cast(tf.convert_to_tensor(
+                [y[-1]]).reshape(1, 1), dtype=x.data.dtype)
             cur_y = tf.Variable(cur_y_tf)
             logprobs, h0, c0 = self.decoder(encoded, cur_y, h0=h0, c0=c0)
             _, next_y = logprobs.data.max(2)
@@ -169,12 +209,18 @@ class Seq2Seq(tf.Module):
                 break
         return y
 
-    def reinforce_sample(self, x, max_length=30, temperature=1.0, argmax=False):
+    def reinforce_sample(
+            self,
+            x,
+            max_length=30,
+            temperature=1.0,
+            argmax=False):
         N, T = x.shape(0), max_length
         encoded = self.encoder(x)
         y = tf.dtypes.cast(tf.fill([N, T], self.NULL), dtype=tf.int64)
         done = tf.dtypes.cast(tf.fill([N], 0), dtype=tf.int8)
-        cur_input = tf.Variable(tf.dtypes.cast(tf.fill([N, 1], self.START), dtype=x.data.dtype))
+        cur_input = tf.Variable(tf.dtypes.cast(
+            tf.fill([N, 1], self.START), dtype=x.data.dtype))
         h, c = None, None
         self.multinomial_outputs = []
         self.multinomial_probs = []
@@ -198,7 +244,7 @@ class Seq2Seq(tf.Module):
                 break
         return tf.Variable(tf.dtypes.cast(y, dtype=x.data.dtype))
 
-    def reinforce_backward(self, reward, output_mask=None): #TODO make necessary changes
+    def reinforce_backward(self, reward, output_mask=None):  # TODO make necessary changes
         """
     If output_mask is not None, then it should be a FloatTensor of shape (N, T)
     giving a multiplier to the output.
@@ -220,7 +266,8 @@ class Seq2Seq(tf.Module):
         for sampled_output in self.multinomial_outputs:
             sampled_output.reinforce(reward)
             grad_output.append(None)
-        # torch.autograd.backward(self.multinomial_outputs, grad_output, retain_variables=True) #CHANGE
+        # torch.autograd.backward(self.multinomial_outputs, grad_output,
+        # retain_variables=True) #CHANGE
 
 
 def logical_and(x, y):

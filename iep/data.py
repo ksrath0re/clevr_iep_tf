@@ -30,6 +30,7 @@ class ClevrDataLoader:
         feature_h5_path = kwargs.pop('feature_h5')
         print('Reading features from ', feature_h5_path)
         self.feature_h5 = h5py.File(feature_h5_path, 'r')
+        print(self.feature_h5)
 
         self.image_h5 = None
         if 'image_h5' in kwargs:
@@ -38,6 +39,7 @@ class ClevrDataLoader:
             self.image_h5 = h5py.File(image_h5_path, 'r')
 
         self.vocab = kwargs.pop('vocab')
+        #print("---------------", self.vocab)
 
         question_h5_path = kwargs.pop('question_h5')
         print('Reading questions from ', question_h5_path)
@@ -62,14 +64,18 @@ class ClevrDataLoader:
         '''Data from the question file is small, so read it all into memory'''
         print('Reading question data into memory')
         # self.size = self.question_h5['questions'].shape[0]
-        self.all_questions = _dataset_to_tensor(self.question_h5['questions'], mask)
-        self.all_image_idxs = _dataset_to_tensor(self.question_h5['image_idxs'], mask)
+        self.all_questions = _dataset_to_tensor(
+            self.question_h5['questions'], mask)
+        self.all_image_idxs = _dataset_to_tensor(
+            self.question_h5['image_idxs'], mask)
         self.all_programs = None
 
         if 'programs' in self.question_h5:
-            self.all_programs = _dataset_to_tensor(self.question_h5['programs'], mask)
+            self.all_programs = _dataset_to_tensor(
+                self.question_h5['programs'], mask)
 
-        self.all_answers = _dataset_to_tensor(self.question_h5['answers'], mask)
+        self.all_answers = _dataset_to_tensor(
+            self.question_h5['answers'], mask)
 
     def __len__(self):
         if self.max_samples is None:
@@ -102,13 +108,16 @@ class ClevrDataLoader:
         features = self.feature_h5['features'][image_idx]
         features = tf.convert_to_tensor(np.asarray(features, dtype=np.float32))
 
-
         program_json = None
-        if program_seq is not None:
+        #print("Program Sequence : ")
+        #print(program_seq)
+        pr = np.asarray(program_seq)
+        if pr is not None:
             program_json_seq = []
-            for fn_idx in program_seq:
+            for fn_idx in pr:
                 fn_str = self.vocab['program_idx_to_token'][fn_idx]
-                if fn_str == '<START>' or fn_str == '<END>': continue
+                if fn_str == '<START>' or fn_str == '<END>':
+                    continue
                 fn = programs.str_to_function(fn_str)
                 program_json_seq.append(fn)
 
