@@ -34,7 +34,7 @@ class Seq2Seq(tf.keras.Model):
         super(Seq2Seq, self).__init__()
         self.hidden_size = hidden_dim
         self.num_layers = rnn_num_layers
-       
+
         self.encoder_embed = tf.keras.layers.Embedding(
             encoder_vocab_size, wordvec_dim)
         encoder_cells = [
@@ -81,41 +81,32 @@ class Seq2Seq(tf.keras.Model):
     def before_rnn(self, x, replace=0):
         # TODO: Use PackedSequence instead of manually plucking out the last
         # non-NULL entry of each sequence; it is cleaner and more efficient.
-        N, T = x.shape()
-        idx = tf.dtypes.cast(tf.fill([N], tf.int64(T - 1)), dtype=tf.int64)
+        N, T = tf.shape(x)
+        idx = tf.dtypes.cast(tf.fill([N], (T - 1)), dtype=tf.int64)
+        idx_np = idx.numpy()
 
         # Find the last non-null element in each sequence. Is there a clean
         # way to do this?
-        x_cpu = x.cpu()
         for i in range(N):
             for t in range(T - 1):
-                if x_cpu.data[i,
-                              t] != self.NULL and x_cpu.data[i,
-                                                             t + 1] == self.NULL:
-                    idx[i] = t
+                if x[i, t] != self.NULL and x[i, t + 1] == self.NULL:
+                    idx_np[i] = t
                     break
+        idx = tf.convert_to_tensor(idx_np, dtype=tf.int64)
         idx = tf.dtypes.cast(idx, dtype=tf.int64)
-        x[x.data == self.NULL] = replace
+        x_np = x.read_value().numpy()
+        for i, v in enumerate(x_np):
+            if (v.any() == 0):
+                x_np[i] = 0
+        x = tf.Variable(tf.convert_to_tensor(x_np, dtype=tf.float32))
         return x, tf.Variable(idx)
 
     def encoder(self, x):
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
         x, idx = self.before_rnn(x)
         embed = self.encoder_embed(x)
-        h0 = tf.dtypes.cast(
-            tf.Variable(
-                tf.zeros(
-                    L,
-                    N,
-                    H),
-                dtype=embed.data.dtype))
-        c0 = tf.dtypes.cast(
-            tf.Variable(
-                tf.zeros(
-                    L,
-                    N,
-                    H),
-                dtype=embed.data.dtype))
+        h0 =  tf.Variable(tf.zeros([L, N, H], embed.dtype))
+        c0 =  tf.Variable(tf.zeros([L, N, H], embed.dtype))
 
         out, _ = self.encoder_rnn(embed, (h0, c0))
 
@@ -133,21 +124,9 @@ class Seq2Seq(tf.keras.Model):
         encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
         rnn_input = tf.concat([encoded_repeat, y_embed], 2)
         if h0 is None:
-            h0 = tf.dtypes.cast(
-                tf.Variable(
-                    tf.zeros(
-                        L,
-                        N,
-                        H),
-                    dtype=encoded.data.dtype))
+            h0 = tf.Variable(tf.zeros([L, N, H],encoded.dtype))
         if c0 is None:
-            c0 = tf.dtypes.cast(
-                tf.Variable(
-                    tf.zeros(
-                        L,
-                        N,
-                        H),
-                    dtype=encoded.data.dtype))
+            c0 = tf.Variable(tf.zeros([L, N, H],encoded.dtype))
         rnn_output, (ht, ct) = self.decoder_rnn(rnn_input, (h0, c0))
 
         rnn_output_2d = rnn_output.contiguous().view(N * T_out, H)

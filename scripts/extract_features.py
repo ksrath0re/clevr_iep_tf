@@ -36,7 +36,10 @@ def build_model(args, img_size):
     full_model = tf.keras.applications.ResNet101(
         input_shape=img_size, include_top=False, weights='imagenet')
     #print(full_model.summary())
-    return full_model
+    layer_output=full_model.get_layer('conv4_block23_out').output
+    intermediate_model=tf.keras.models.Model(inputs=full_model.input,outputs=layer_output)
+    #return full_model
+    return intermediate_model
 
 
 def run_batch(cur_batch, model):
@@ -53,9 +56,13 @@ def run_batch(cur_batch, model):
         image_batch = tf.reshape(
             image_batch, [
                 image_batch.shape[0], -1, 224, 3])
-
+    print("Image batch Shape Before Feature Extraction : ", image_batch.shape)
     features = model(image_batch)
-
+    features = tf.reshape(features, [-1, 1024, 14, 14])
+    #layer_output=model.get_layer('conv4_block23_out').output
+    #intermediate_model=tf.keras.models.Model(inputs=image_batch,outputs=layer_output)
+    #features = model.get_layer('conv4_block23_out').output
+    print("Feature batch Shape after Feature Extraction : ", features.shape)
     return features
 
 
@@ -86,12 +93,15 @@ def main(args):
             img = imread(path, mode='RGB')
             img = imresize(img, img_size, interp='bicubic')
             img = img.transpose(2, 0, 1)[None]
+            #print("image shapoe : ", img.shape)
             cur_batch.append(img)
             if len(cur_batch) == args.batch_size:
                 feats = run_batch(cur_batch, model)
                 if feat_dset is None:
                     N = len(input_paths)
                     _, C, H, W = feats.shape
+                    print("N :", N)
+                    print("Feats shape :", feats.shape)
                     feat_dset = f.create_dataset('features', (N, C, H, W),
                                                  dtype=np.float32)
                 i1 = i0 + len(cur_batch)
