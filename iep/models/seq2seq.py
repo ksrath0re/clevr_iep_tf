@@ -13,8 +13,6 @@
 # from torch.autograd import Variable
 
 import tensorflow as tf
-#import tensorflow.nn as nn
-
 from iep.embedding import expand_embedding_vocab
 
 
@@ -37,21 +35,25 @@ class Seq2Seq(tf.keras.Model):
 
         self.encoder_embed = tf.keras.layers.Embedding(
             encoder_vocab_size, wordvec_dim)
-        encoder_cells = [
-            tf.keras.layers.LSTMCell(
-                hidden_dim,
-                dropout=rnn_dropout) for _ in range(rnn_num_layers)]
-        self.encoder_rnn = tf.keras.layers.StackedRNNCells(encoder_cells)
+        input_tensor = tf.keras.Input(shape=(64,46))
+        self.encoder_rnn = tf.keras.Sequential()
+        #self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim,dropout=rnn_dropout, return_sequences=False)(input_tensor)
+        for i in range(rnn_num_layers):
+            if (i ==0 and rnn_num_layers == 1):
+               self.encoder_rnn.add(tf.keras.layers.LSTM(hidden_dim,dropout=rnn_dropout, return_sequences=False))
+            elif(i != (rnn_num_layers - 1)):
+               self.encoder_rnn.add(tf.keras.layers.LSTM(hidden_dim,dropout=rnn_dropout, return_sequences=True))
+            else:
+               self.encoder_rnn.add(tf.keras.layers.LSTM(hidden_dim,dropout=rnn_dropout, return_sequences=False))
+        #self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim,dropout=rnn_dropout) for _ in range(rnn_num_layers)
+        #self.encoder_rnn = tf.keras.layers.StackedRNNCells(encoder_cells)
         #    tf.keras.layers.LSTM(wordvec_dim, hidden_dim, rnn_num_layers,
         # dropout=rnnq_dropout, batch_first=True)
         self.decoder_embed = tf.keras.layers.Embedding(
             decoder_vocab_size, wordvec_dim)
-        decoder_cells = [
-            tf.keras.layers.LSTMCell(
-                hidden_dim,
-                dropout=rnn_dropout) for _ in range(rnn_num_layers)]
-        self.decoder_rnn = tf.keras.layers.StackedRNNCells(
-            decoder_cells, input_shape=(wordvec_dim + hidden_dim,))
+        #self.decoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)
+        #self.decoder_rnn = tf.keras.layers.StackedRNNCells(
+         #   decoder_cells, input_shape=(wordvec_dim + hidden_dim,))
         #    LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
         # dropout=rnn_dropout, batch_first=True)
         self.decoder_linear = tf.keras.layers.Dense(
