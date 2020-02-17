@@ -16,6 +16,23 @@ import tensorflow as tf
 from iep.embedding import expand_embedding_vocab
 
 
+class Encoder(tf.keras.Model):
+    def __init__(self, encoder_vocab_size, wordvec_dim, hidden_dim, rnn_dropout):
+        super(Encoder, self).__init__()
+        self.embedding = tf.keras.layers.Embedding(encoder_vocab_size, wordvec_dim)
+        self.encoder_rnn1 = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
+        self.encoder_rnn2 = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
+
+    def call(self, x, hidden):
+        x = self.embedding(x)
+        x, state = self.encoder_rnn1(x, initial_state=hidden)
+        output, state = self.encoder_rnn1(x, initial_state=state)
+        return output, state
+
+    def initialize_hidden_state(self):
+        return tf.zeros((self.batch_sz, self.enc_units))
+
+
 class Seq2Seq(tf.keras.Model):
     def __init__(self,
                  encoder_vocab_size=100,
@@ -32,44 +49,19 @@ class Seq2Seq(tf.keras.Model):
         super(Seq2Seq, self).__init__()
         self.hidden_size = hidden_dim
         self.num_layers = rnn_num_layers
-
+        self.encoder_vocab_size = encoder_vocab_size
+        self.wordvec_dim = wordvec_dim
+        self.rnn_dropout = rnn_dropout
         self.encoder_embed = tf.keras.layers.Embedding(
             encoder_vocab_size, wordvec_dim)
         input_tensor = tf.keras.Input(shape=(46, 300))
         input_shape = [64, 46, 300]
-      
-        #self.encoder_rnn = tf.keras.Sequential()
-        #self.encoder_rnn.add(tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True))
-        #self.encoder_rnn.add(tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=False, return_state=True))
-        self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True)(input_tensor)
-        self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True)(self.encoder_rnn)
 
-        # self.encoder_rnn =
-        # tf.keras.layers.LSTM(hidden_dim,dropout=rnn_dropout,
-        # return_sequences=False)(input_tensor)
-        #for i in range(rnn_num_layers):
-        #    if (i == 0 and rnn_num_layers == 1):
-        #        self.encoder_rnn.add(
-        #            tf.keras.layers.LSTM(
-        #                hidden_dim,
-        #                dropout=rnn_dropout,
-        #                return_sequences=False))(self.encoder_embed)
-        #    elif(i != (rnn_num_layers - 1)):
-        #        self.encoder_rnn.add(
-        #            tf.keras.layers.LSTM(
-        #                hidden_dim,
-        #                dropout=rnn_dropout,
-        #                return_sequences=True))
-        #    else:
-        #        self.encoder_rnn.add(
-        #            tf.keras.layers.LSTM(
-        #                hidden_dim,
-        #                dropout=rnn_dropout,
-        #                return_sequences=False))
-        # self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim,dropout=rnn_dropout) for _ in range(rnn_num_layers)
-        # self.encoder_rnn = tf.keras.layers.StackedRNNCells(encoder_cells)
-        #    tf.keras.layers.LSTM(wordvec_dim, hidden_dim, rnn_num_layers,
-        # dropout=rnnq_dropout, batch_first=True)
+        self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True)(input_tensor)
+        self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True)(
+            self.encoder_rnn)
+
+
         self.decoder_embed = tf.keras.layers.Embedding(decoder_vocab_size, wordvec_dim)
         # self.decoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)
         # self.decoder_rnn = tf.keras.layers.StackedRNNCells(
@@ -106,7 +98,7 @@ class Seq2Seq(tf.keras.Model):
         N, T = tf.shape(x)
         idx = tf.dtypes.cast(tf.fill([N], (T - 1)), dtype=tf.int64)
         idx_np = idx.numpy()
-        #print("Idx np size :", len(idx_np))
+        # print("Idx np size :", len(idx_np))
 
         # Find the last non-null element in each sequence. Is there a clean
         # way to do this?
@@ -117,7 +109,7 @@ class Seq2Seq(tf.keras.Model):
                     break
         idx = tf.convert_to_tensor(idx_np, dtype=tf.int64)
         idx = tf.dtypes.cast(idx, dtype=tf.int64)
-        #print("Idx np tensor size :", idx.shape)
+        # print("Idx np tensor size :", idx.shape)
         x_np = x.read_value().numpy()
         for i, v in enumerate(x_np):
             if (v.any() == 0):
@@ -130,38 +122,41 @@ class Seq2Seq(tf.keras.Model):
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
         x, idx = self.before_rnn(x)
         print("Shape of X after before_rnn:", x.shape)
-        embed = self.encoder_embed(x)
-        print("Embed ka shape :", embed.shape)
-        h0 = tf.Variable(tf.zeros([L, N, H], embed.dtype))
-        c0 = tf.Variable(tf.zeros([L, N, H], embed.dtype))
+        encoder = Encoder(self.encoder_vocab_size, self.wordvec_dim, self.hidden_size, self.rnn_dropout)
+        #embed = self.encoder_embed(x)
+        #print("Embed ka shape :", embed.shape)
+        # h0 = tf.Variable(tf.zeros([L, N, H], embed.dtype))
+        # c0 = tf.Variable(tf.zeros([L, N, H], embed.dtype))
+        h0 = tf.Variable(tf.zeros([L, N, H], tf.float32))
+        c0 = tf.Variable(tf.zeros([L, N, H], tf.float32))
         # print(self.encoder_rnn.summary())
         print("h0 c0 ka shape - h0 Size : ", h0.shape, " and ", c0.shape, " c0 shape")
-        out, *_ = self.encoder_rnn(embed, initial_state=(h0, c0))
+        out, *_ = encoder(x, (h0, c0))
 
         # Pull out the hidden state for the last non-null value in each input
         print("idx Shape :", idx.shape, " out shape : ", out.shape)
         idx = tf.broadcast_to(tf.reshape(idx, [N, 1, 1]), [N, 1, H])
         print("idx Shape after broadcast ", idx.shape, " out shape : ", out.shape)
-        t=tf.gather(out, idx, batch_dims=1)
+        t = tf.gather(out, idx, batch_dims=1)
         return tf.reshape(t, [N, H])
 
     def decoder(self, encoded, y, h0=None, c0=None):
-        V_in, V_out, D, H, L, N, T_in, T_out=self.get_dims(y=y)
+        V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
 
         if T_out > 1:
-            y, _=self.before_rnn(y)
-        y_embed=self.decoder_embed(y)
-        y_embed=y_embed.view(y_embed.shape[0], -1, y_embed.shape[-1])
-        encoded_repeat=encoded.view(N, 1, H).expand(N, T_out, H)
-        rnn_input=tf.concat([encoded_repeat, y_embed], 2)
+            y, _ = self.before_rnn(y)
+        y_embed = self.decoder_embed(y)
+        y_embed = y_embed.view(y_embed.shape[0], -1, y_embed.shape[-1])
+        encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
+        rnn_input = tf.concat([encoded_repeat, y_embed], 2)
         if h0 is None:
-            h0=tf.Variable(tf.zeros([L, N, H], encoded.dtype))
+            h0 = tf.Variable(tf.zeros([L, N, H], encoded.dtype))
         if c0 is None:
-            c0=tf.Variable(tf.zeros([L, N, H], encoded.dtype))
-        rnn_output, (ht, ct)=self.decoder_rnn(rnn_input, (h0, c0))
+            c0 = tf.Variable(tf.zeros([L, N, H], encoded.dtype))
+        rnn_output, (ht, ct) = self.decoder_rnn(rnn_input, (h0, c0))
 
-        rnn_output_2d=rnn_output.contiguous().view(N * T_out, H)
-        output_logprobs=self.decoder_linear(
+        rnn_output_2d = rnn_output.contiguous().view(N * T_out, H)
+        output_logprobs = self.decoder_linear(
             rnn_output_2d).view(N, T_out, V_out)
 
         return output_logprobs, ht, ct
@@ -179,41 +174,41 @@ class Seq2Seq(tf.keras.Model):
     - output_logprobs: Variable of shape (N, T_out, V_out)
     - y: LongTensor Variable of shape (N, T_out)
     """
-        self.multinomial_outputs=None
-        V_in, V_out, D, H, L, N, T_in, T_out=self.get_dims(y=y)
-        mask=y.data != self.NULL
-        y_mask_tf=tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
-        y_mask=tf.Variable(y_mask_tf)
-        y_mask[:, 1:]=mask[:, 1:]
-        y_masked=y[y_mask]
-        out_mask_tf=tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
-        out_mask=tf.Variable(out_mask_tf)
-        out_mask[:, :-1]=mask[:, 1:]
-        out_mask=out_mask.view(N, T_out, 1).expand(N, T_out, V_out)
-        out_masked=output_logprobs[out_mask].reshape(-1, V_out)
-        loss=tf.nn.softmax_cross_entropy_with_logits(out_masked, y_masked)
+        self.multinomial_outputs = None
+        V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
+        mask = y.data != self.NULL
+        y_mask_tf = tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
+        y_mask = tf.Variable(y_mask_tf)
+        y_mask[:, 1:] = mask[:, 1:]
+        y_masked = y[y_mask]
+        out_mask_tf = tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
+        out_mask = tf.Variable(out_mask_tf)
+        out_mask[:, :-1] = mask[:, 1:]
+        out_mask = out_mask.view(N, T_out, 1).expand(N, T_out, V_out)
+        out_masked = output_logprobs[out_mask].reshape(-1, V_out)
+        loss = tf.nn.softmax_cross_entropy_with_logits(out_masked, y_masked)
         return loss
 
     def __call__(self, x, y):
-        encoded=self.encoder(x)
-        output_logprobs, _, _=self.decoder(encoded, y)
-        loss=self.compute_loss(output_logprobs, y)
+        encoded = self.encoder(x)
+        output_logprobs, _, _ = self.decoder(encoded, y)
+        loss = self.compute_loss(output_logprobs, y)
         return loss
 
     def sample(self, x, max_length=50):
         # TODO: Handle sampling for minibatch inputs
         # TODO: Beam search?
-        self.multinomial_outputs=None
+        self.multinomial_outputs = None
         assert x.shape(0) == 1, "Sampling minibatches not implemented"
-        encoded=self.encoder(x)
-        y=[self.START]
-        h0, c0=None, None
+        encoded = self.encoder(x)
+        y = [self.START]
+        h0, c0 = None, None
         while True:
-            cur_y_tf=tf.dtypes.cast(tf.convert_to_tensor(
+            cur_y_tf = tf.dtypes.cast(tf.convert_to_tensor(
                 [y[-1]]).reshape(1, 1), dtype=x.data.dtype)
-            cur_y=tf.Variable(cur_y_tf)
-            logprobs, h0, c0=self.decoder(encoded, cur_y, h0=h0, c0=c0)
-            _, next_y=logprobs.data.max(2)
+            cur_y = tf.Variable(cur_y_tf)
+            logprobs, h0, c0 = self.decoder(encoded, cur_y, h0=h0, c0=c0)
+            _, next_y = logprobs.data.max(2)
             y.append(next_y[0, 0, 0])
             if len(y) >= max_length or y[-1] == self.END:
                 break
@@ -225,31 +220,31 @@ class Seq2Seq(tf.keras.Model):
             max_length=30,
             temperature=1.0,
             argmax=False):
-        N, T=x.shape(0), max_length
-        encoded=self.encoder(x)
-        y=tf.dtypes.cast(tf.fill([N, T], self.NULL), dtype=tf.int64)
-        done=tf.dtypes.cast(tf.fill([N], 0), dtype=tf.int8)
-        cur_input=tf.Variable(tf.dtypes.cast(
+        N, T = x.shape(0), max_length
+        encoded = self.encoder(x)
+        y = tf.dtypes.cast(tf.fill([N, T], self.NULL), dtype=tf.int64)
+        done = tf.dtypes.cast(tf.fill([N], 0), dtype=tf.int8)
+        cur_input = tf.Variable(tf.dtypes.cast(
             tf.fill([N, 1], self.START), dtype=x.data.dtype))
-        h, c=None, None
-        self.multinomial_outputs=[]
-        self.multinomial_probs=[]
+        h, c = None, None
+        self.multinomial_outputs = []
+        self.multinomial_probs = []
         for t in range(T):
             # logprobs is N x 1 x V
-            logprobs, h, c=self.decoder(encoded, cur_input, h0=h, c0=c)
-            logprobs=logprobs / temperature
-            probs=tf.nn.softmax(logprobs.view(N, -1))  # Now N x V
+            logprobs, h, c = self.decoder(encoded, cur_input, h0=h, c0=c)
+            logprobs = logprobs / temperature
+            probs = tf.nn.softmax(logprobs.view(N, -1))  # Now N x V
             if argmax:
-                _, cur_output=probs.max(1)
+                _, cur_output = probs.max(1)
             else:
-                cur_output=probs.multinomial()  # Now N x 1
+                cur_output = probs.multinomial()  # Now N x 1
             self.multinomial_outputs.append(cur_output)
             self.multinomial_probs.append(probs)
-            cur_output_data=cur_output.data
-            not_done=logical_not(done)
-            y[:, t][not_done]=cur_output_data[not_done]
-            done=logical_or(done, cur_output_data.cpu() == self.END)
-            cur_input=cur_output
+            cur_output_data = cur_output.data
+            not_done = logical_not(done)
+            y[:, t][not_done] = cur_output_data[not_done]
+            done = logical_or(done, cur_output_data.cpu() == self.END)
+            cur_input = cur_output
             if done.sum() == N:
                 break
         return tf.Variable(tf.dtypes.cast(y, dtype=x.data.dtype))
@@ -260,7 +255,7 @@ class Seq2Seq(tf.keras.Model):
     giving a multiplier to the output.
     """
         assert self.multinomial_outputs is not None, 'Must call reinforce_sample first'
-        grad_output=[]
+        grad_output = []
 
         def gen_hook(mask):
             def hook(grad):
@@ -270,7 +265,7 @@ class Seq2Seq(tf.keras.Model):
 
         if output_mask is not None:
             for t, probs in enumerate(self.multinomial_probs):
-                mask=tf.Variable(output_mask[:, t])
+                mask = tf.Variable(output_mask[:, t])
                 probs.register_hook(gen_hook(mask))
 
         for sampled_output in self.multinomial_outputs:
