@@ -219,7 +219,8 @@ def train_loop(args, train_loader, val_loader):
         pg_optimizer = optimizers.Adam(args.learning_rate)
         print('Here is the program generator:')
         # program_generator.build(input_shape=[46,])
-        print(program_generator)
+        #program_generator.compile(optimizer='adam', loss='mse')
+        #print(program_generator.summary())
     if args.model_type == 'EE' or args.model_type == 'PG+EE':
         execution_engine, ee_kwargs = get_execution_engine(args)
         ee_optimizer = optimizers.Adam(args.learning_rate)
@@ -236,6 +237,8 @@ def train_loop(args, train_loader, val_loader):
 
     # set_mode('train', [program_generator, execution_engine, baseline_model])
 
+    print('train_loader has %d samples' % len(train_loader))
+    #train_loader = train_loader[:256]
     print('train_loader has %d samples' % len(train_loader))
     print('val_loader has %d samples' % len(val_loader))
     # data_sampler = iter(range(len(train_loader)))
