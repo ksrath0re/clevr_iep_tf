@@ -19,6 +19,7 @@ from iep.embedding import expand_embedding_vocab
 class Encoder(tf.keras.Model):
     def __init__(self, encoder_vocab_size, wordvec_dim, hidden_dim, rnn_dropout):
         super(Encoder, self).__init__()
+        self.hidden_dim = hidden_dim
         self.embedding = tf.keras.layers.Embedding(encoder_vocab_size, wordvec_dim)
         self.encoder_rnn1 = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
         self.encoder_rnn2 = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
@@ -30,7 +31,7 @@ class Encoder(tf.keras.Model):
         return output, state
 
     def initialize_hidden_state(self):
-        return tf.zeros((self.batch_sz, self.enc_units))
+        return tf.zeros((64, self.hidden_dim))
 
 
 class Seq2Seq(tf.keras.Model):
@@ -123,6 +124,7 @@ class Seq2Seq(tf.keras.Model):
         x, idx = self.before_rnn(x)
         print("Shape of X after before_rnn:", x.shape)
         encoder = Encoder(self.encoder_vocab_size, self.wordvec_dim, self.hidden_size, self.rnn_dropout)
+        hidden = encoder.initialize_hidden_state()
         #embed = self.encoder_embed(x)
         #print("Embed ka shape :", embed.shape)
         # h0 = tf.Variable(tf.zeros([L, N, H], embed.dtype))
@@ -131,7 +133,7 @@ class Seq2Seq(tf.keras.Model):
         c0 = tf.Variable(tf.zeros([L, N, H], tf.float32))
         # print(self.encoder_rnn.summary())
         print("h0 c0 ka shape - h0 Size : ", h0.shape, " and ", c0.shape, " c0 shape")
-        out, *_ = encoder(x, (h0, c0))
+        out, *_ = encoder(x, hidden)
 
         # Pull out the hidden state for the last non-null value in each input
         print("idx Shape :", idx.shape, " out shape : ", out.shape)
