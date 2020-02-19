@@ -16,25 +16,36 @@ import tensorflow as tf
 from iep.embedding import expand_embedding_vocab
 import numpy as np
 
-
 class Encoder(tf.keras.Model):
-    def __init__(self, encoder_vocab_size, wordvec_dim, hidden_dim, rnn_dropout):
+    def __init__(
+            self,
+            encoder_vocab_size,
+            wordvec_dim,
+            hidden_dim,
+            rnn_dropout):
         super(Encoder, self).__init__()
         self.hidden_dim = hidden_dim
-        self.embedding = tf.keras.layers.Embedding(encoder_vocab_size, wordvec_dim)
-        self.encoder_rnn1 = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True,
-                                                 return_state=True)
-        self.encoder_rnn2 = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True,
-                                                 return_state=True)
+        self.embedding = tf.keras.layers.Embedding(
+            encoder_vocab_size, wordvec_dim)
+        self.encoder_rnn1 = tf.keras.layers.LSTM(
+            hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
+        self.encoder_rnn2 = tf.keras.layers.LSTM(
+            hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
 
     def call(self, x, hidden):
         x = self.embedding(x)
-        x, state = self.encoder_rnn1(x, initial_state=hidden)
-        output, state = self.encoder_rnn1(x, initial_state=state)
-        return output, state
+        x, state_h, state_c = self.encoder_rnn1(x)
+        #x = self.encoder_rnn1(x)
+        #print("size of output : ", len(x))
+        #for i, item in enumerate(x):
+        #    print("Shape of ", i, " : ", item.shape)
+        state = [state_h, state_c]
+        output, state_h, state_c = self.encoder_rnn2(x, initial_state=state)
+        return output, state_h, state_c
 
     def initialize_hidden_state(self):
-        return tf.zeros((64, self.hidden_dim))
+        return tf.zeros((self.hidden_dim, self.hidden_dim))
+        # return tf.eye(self.hidden_dim, batch_shape=[64])
 
 
 class Seq2Seq(tf.keras.Model):
@@ -56,16 +67,17 @@ class Seq2Seq(tf.keras.Model):
         self.encoder_vocab_size = encoder_vocab_size
         self.wordvec_dim = wordvec_dim
         self.rnn_dropout = rnn_dropout
-        self.encoder_embed = tf.keras.layers.Embedding(
+        self.encoder_embed2 = tf.keras.layers.Embedding(
             encoder_vocab_size, wordvec_dim)
         input_tensor = tf.keras.Input(shape=(46, 300))
         input_shape = [64, 46, 300]
 
-        self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True)(input_tensor)
-        self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True)(
-            self.encoder_rnn)
+        #self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True)(input_tensor)
+        # self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True)(
+        #    self.encoder_rnn)
 
-        self.decoder_embed = tf.keras.layers.Embedding(decoder_vocab_size, wordvec_dim)
+        self.decoder_embed = tf.keras.layers.Embedding(
+            decoder_vocab_size, wordvec_dim)
         # self.decoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)
         # self.decoder_rnn = tf.keras.layers.StackedRNNCells(
         #   decoder_cells, input_shape=(wordvec_dim + hidden_dim,))
@@ -83,16 +95,16 @@ class Seq2Seq(tf.keras.Model):
                                word2vec=word2vec, std=std)
 
     def get_dims(self, x=None, y=None):
-        V_in = self.encoder_embed.input_dim
+        V_in = self.encoder_embed2.input_dim
         V_out = self.decoder_embed.input_dim
-        D = self.encoder_embed.output_dim
+        D = self.encoder_embed2.output_dim
         H = self.hidden_size
         L = self.num_layers
 
         N = tf.shape(x)[0] if x is not None else None
-        N = y.shape(0) if N is None and y is not None else N
+        N = tf.shape(y)[0] if N is None and y is not None else N
         T_in = tf.shape(x)[1] if x is not None else None
-        T_out = y.reshape(1, -1).shape(1) if y is not None else None
+        T_out = tf.shape(y.reshape(1, -1))[1] if y is not None else None
         return V_in, V_out, D, H, L, N, T_in, T_out
 
     def before_rnn(self, x, replace=0):
@@ -125,24 +137,21 @@ class Seq2Seq(tf.keras.Model):
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
         x, idx = self.before_rnn(x)
         print("Shape of X after before_rnn:", x.shape)
-        encoder = Encoder(self.encoder_vocab_size, self.wordvec_dim, self.hidden_size, self.rnn_dropout)
-        hidden = encoder.initialize_hidden_state()
-        # embed = self.encoder_embed(x)
-        # print("Embed ka shape :", embed.shape)
-        # h0 = tf.Variable(tf.zeros([L, N, H], embed.dtype))
-        # c0 = tf.Variable(tf.zeros([L, N, H], embed.dtype))
-        h0 = tf.Variable(tf.zeros([L, N, H], tf.float32))
-        c0 = tf.Variable(tf.zeros([L, N, H], tf.float32))
-        # print(self.encoder_rnn.summary())
-        print("h0 c0 ka shape - h0 Size : ", h0.shape, " and ", c0.shape, " c0 shape")
-        out, *_ = encoder(x, hidden)
+        encoder_ob = Encoder(
+            self.encoder_vocab_size,
+            self.wordvec_dim,
+            self.hidden_size,
+            self.rnn_dropout)
+        hidden = encoder_ob.initialize_hidden_state()
+        out, _, _ = encoder_ob(x, hidden)
 
         # Pull out the hidden state for the last non-null value in each input
         print("idx Shape :", idx.shape, " out shape : ", out.shape)
         idx = tf.broadcast_to(tf.reshape(idx, [N, 1, 1]), [N, 1, H])
-        print("idx Shape after broadcast ", idx.shape, " out shape : ", out.shape)
+        print("idx Shape after broadcast ", idx.shape)
         t = gather_numpy(out, 1, idx)
-
+        print(" t ka shape : ", t.shape)
+        
         return tf.reshape(t, [N, H])
 
     def decoder(self, encoded, y, h0=None, c0=None):
@@ -196,6 +205,7 @@ class Seq2Seq(tf.keras.Model):
 
     def __call__(self, x, y):
         encoded = self.encoder(x)
+        print("Encoded ka shape : ", encoded.shape)
         output_logprobs, _, _ = self.decoder(encoded, y)
         loss = self.compute_loss(output_logprobs, y)
         return loss
@@ -279,8 +289,7 @@ class Seq2Seq(tf.keras.Model):
         # torch.autograd.backward(self.multinomial_outputs, grad_output,
         # retain_variables=True) #CHANGE
 
-
-def gather_numpy(input, dim, index):
+def gather_numpy(t, dim, index):
     """
     Gathers values along an axis specified by dim.
     For a 3-D tensor the output is specified by:
@@ -293,13 +302,14 @@ def gather_numpy(input, dim, index):
     :return: tensor of gathered values
     """
     idx_xsection_shape = index.shape[:dim] + index.shape[dim + 1:]
-    self_xsection_shape = input.shape[:dim] + input.shape[dim + 1:]
+    self_xsection_shape = t.shape[:dim] + t.shape[dim + 1:]
     if idx_xsection_shape != self_xsection_shape:
         raise ValueError("Except for dimension " + str(dim) +
                          ", all dimensions of index and self should be the same size")
-    data_swaped = np.swapaxes(input, 0, dim)
+    data_swaped = np.swapaxes(t, 0, dim)
     index_swaped = np.swapaxes(index, 0, dim)
-    gathered = np.choose(index_swaped, data_swaped)
+    #gathered = np.choose(index_swaped, data_swaped)
+    gathered = np.take_along_axis(data_swaped, index_swaped, axis=0)
     return np.swapaxes(gathered, 0, dim)
 
 
