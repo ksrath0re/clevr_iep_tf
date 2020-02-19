@@ -6,15 +6,11 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-# import torch
-# import torch.cuda
-# import torch.nn as nn
-# import torch.nn.functional as F
-# from torch.autograd import Variable
 
 import tensorflow as tf
 from iep.embedding import expand_embedding_vocab
 import numpy as np
+
 
 class Encoder(tf.keras.Model):
     def __init__(
@@ -48,6 +44,40 @@ class Encoder(tf.keras.Model):
         # return tf.eye(self.hidden_dim, batch_shape=[64])
 
 
+class Decoder(tf.keras.Model):
+    def __init__(
+            self,
+            decoder_vocab_size,
+            wordvec_dim,
+            hidden_dim,
+            rnn_dropout):
+        super(Decoder, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.decoder_embedding = tf.keras.layers.Embedding(decoder_vocab_size, wordvec_dim)
+        self.decoder_rnn1 = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
+        self.decoder_rnn2 = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
+        self.decoder_linear = tf.keras.layers.Dense(decoder_vocab_size, input_shape=(hidden_dim,))
+
+    def call(self, hidden, y, encoded, N, H, T_out, V_out):
+        y_embed = self.decoder_embedding(y)
+        y_embed = tf.reshape(y_embed, [y_embed.shape[0], -1, y_embed.shape[-1]])
+        # encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
+        encoded_repeat = tf.broadcast_to(tf.reshape(encoded, [N, 1, H]), [N, T_out, H])
+        rnn_input = tf.concat([encoded_repeat, y_embed], 2)
+
+        x, state_h, state_c = self.decoder_rnn1(rnn_input)
+        state = [state_h, state_c]
+        output, state_h, state_c = self.decoder_rnn2(x, initial_state=state)
+        output_2d = tf.reshape(output, [N*T_out, H])
+        output_logprobs = tf.reshape(self.decoder_linear(output_2d), [N, T_out, V_out])
+        return output_logprobs, state_h, state_c
+
+    def initialize_hidden_state(self):
+        return tf.zeros((self.hidden_dim, self.hidden_dim))
+        # return tf.eye(self.hidden_dim, batch_shape=[64])
+
+
+
 class Seq2Seq(tf.keras.Model):
     def __init__(self,
                  encoder_vocab_size=100,
@@ -65,6 +95,7 @@ class Seq2Seq(tf.keras.Model):
         self.hidden_size = hidden_dim
         self.num_layers = rnn_num_layers
         self.encoder_vocab_size = encoder_vocab_size
+        self.decoder_vocab_size = decoder_vocab_size
         self.wordvec_dim = wordvec_dim
         self.rnn_dropout = rnn_dropout
         self.encoder_embed2 = tf.keras.layers.Embedding(
@@ -72,19 +103,15 @@ class Seq2Seq(tf.keras.Model):
         input_tensor = tf.keras.Input(shape=(46, 300))
         input_shape = [64, 46, 300]
 
-        #self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True)(input_tensor)
-        # self.encoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True)(
-        #    self.encoder_rnn)
-
-        self.decoder_embed = tf.keras.layers.Embedding(
-            decoder_vocab_size, wordvec_dim)
+        # self.decoder_embed = tf.keras.layers.Embedding(
+        #     decoder_vocab_size, wordvec_dim)
         # self.decoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)
         # self.decoder_rnn = tf.keras.layers.StackedRNNCells(
         #   decoder_cells, input_shape=(wordvec_dim + hidden_dim,))
         #    LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
         # dropout=rnn_dropout, batch_first=True)
-        self.decoder_linear = tf.keras.layers.Dense(
-            decoder_vocab_size, input_shape=(hidden_dim,))
+        # self.decoder_linear = tf.keras.layers.Dense(
+        #     decoder_vocab_size, input_shape=(hidden_dim,))
         self.NULL = null_token
         self.START = start_token
         self.END = end_token
@@ -104,7 +131,7 @@ class Seq2Seq(tf.keras.Model):
         N = tf.shape(x)[0] if x is not None else None
         N = tf.shape(y)[0] if N is None and y is not None else N
         T_in = tf.shape(x)[1] if x is not None else None
-        T_out = tf.shape(y.reshape(1, -1))[1] if y is not None else None
+        T_out = tf.shape(tf.reshape(y, (1, -1)))[1] if y is not None else None
         return V_in, V_out, D, H, L, N, T_in, T_out
 
     def before_rnn(self, x, replace=0):
@@ -156,22 +183,22 @@ class Seq2Seq(tf.keras.Model):
 
     def decoder(self, encoded, y, h0=None, c0=None):
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
-
+        print("Shape of Y after before_rnn:", y.shape)
         if T_out > 1:
             y, _ = self.before_rnn(y)
-        y_embed = self.decoder_embed(y)
-        y_embed = y_embed.view(y_embed.shape[0], -1, y_embed.shape[-1])
-        encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
-        rnn_input = tf.concat([encoded_repeat, y_embed], 2)
-        if h0 is None:
-            h0 = tf.Variable(tf.zeros([L, N, H], encoded.dtype))
-        if c0 is None:
-            c0 = tf.Variable(tf.zeros([L, N, H], encoded.dtype))
-        rnn_output, (ht, ct) = self.decoder_rnn(rnn_input, (h0, c0))
+        print("Shape of Y after before_rnn:", y.shape)
 
-        rnn_output_2d = rnn_output.contiguous().view(N * T_out, H)
-        output_logprobs = self.decoder_linear(
-            rnn_output_2d).view(N, T_out, V_out)
+        # if h0 is None:
+        #     h0 = tf.Variable(tf.zeros([L, N, H], encoded.dtype))
+        # if c0 is None:
+        #     c0 = tf.Variable(tf.zeros([L, N, H], encoded.dtype))
+        decoder_ob = Decoder(
+            self.decoder_vocab_size,
+            self.wordvec_dim,
+            self.hidden_size,
+            self.rnn_dropout)
+        hidden = decoder_ob.initialize_hidden_state()
+        output_logprobs, ht, ct = decoder_ob(hidden, y, encoded, N, H, T_out)
 
         return output_logprobs, ht, ct
 
