@@ -103,8 +103,8 @@ class Seq2Seq(tf.keras.Model):
         input_tensor = tf.keras.Input(shape=(46, 300))
         input_shape = [64, 46, 300]
 
-        # self.decoder_embed = tf.keras.layers.Embedding(
-        #     decoder_vocab_size, wordvec_dim)
+        self.decoder_embed2 = tf.keras.layers.Embedding(
+             decoder_vocab_size, wordvec_dim)
         # self.decoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)
         # self.decoder_rnn = tf.keras.layers.StackedRNNCells(
         #   decoder_cells, input_shape=(wordvec_dim + hidden_dim,))
@@ -123,7 +123,7 @@ class Seq2Seq(tf.keras.Model):
 
     def get_dims(self, x=None, y=None):
         V_in = self.encoder_embed2.input_dim
-        V_out = self.decoder_embed.input_dim
+        V_out = self.decoder_embed2.input_dim
         D = self.encoder_embed2.output_dim
         H = self.hidden_size
         L = self.num_layers
@@ -198,7 +198,7 @@ class Seq2Seq(tf.keras.Model):
             self.hidden_size,
             self.rnn_dropout)
         hidden = decoder_ob.initialize_hidden_state()
-        output_logprobs, ht, ct = decoder_ob(hidden, y, encoded, N, H, T_out)
+        output_logprobs, ht, ct = decoder_ob(hidden, y, encoded, N, H, T_out, V_out)
 
         return output_logprobs, ht, ct
 
