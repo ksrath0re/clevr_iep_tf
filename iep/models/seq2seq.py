@@ -59,10 +59,14 @@ class Decoder(tf.keras.Model):
         self.decoder_linear = tf.keras.layers.Dense(decoder_vocab_size, input_shape=(hidden_dim,))
 
     def call(self, hidden, y, encoded, N, H, T_out, V_out):
+        print("T_out : ", T_out)
         y_embed = self.decoder_embedding(y)
+        print("y_embed ka shape after embedding : ", y_embed.shape)
         y_embed = tf.reshape(y_embed, [y_embed.shape[0], -1, y_embed.shape[-1]])
         # encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
+        print("Encoded ka shape : ", encoded.shape)
         encoded_repeat = tf.broadcast_to(tf.reshape(encoded, [N, 1, H]), [N, T_out, H])
+        print("Encoded Repeat ka shape : ", encoded_repeat.shape, " y_embed ka shape : ", y_embed.shape)
         rnn_input = tf.concat([encoded_repeat, y_embed], 2)
 
         x, state_h, state_c = self.decoder_rnn1(rnn_input)
@@ -131,7 +135,8 @@ class Seq2Seq(tf.keras.Model):
         N = tf.shape(x)[0] if x is not None else None
         N = tf.shape(y)[0] if N is None and y is not None else N
         T_in = tf.shape(x)[1] if x is not None else None
-        T_out = tf.shape(tf.reshape(y, (1, -1)))[1] if y is not None else None
+        #T_out = tf.shape(tf.reshape(y, (1, -1)))[1] if y is not None else None
+        T_out = tf.shape(y)[1] if y is not None else None
         return V_in, V_out, D, H, L, N, T_in, T_out
 
     def before_rnn(self, x, replace=0):
@@ -183,6 +188,7 @@ class Seq2Seq(tf.keras.Model):
 
     def decoder(self, encoded, y, h0=None, c0=None):
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
+        print("T_out in decoder starting : ", T_out)
         print("Shape of Y after before_rnn:", y.shape)
         if T_out > 1:
             y, _ = self.before_rnn(y)
@@ -234,6 +240,7 @@ class Seq2Seq(tf.keras.Model):
         encoded = self.encoder(x)
         print("Encoded ka shape : ", encoded.shape)
         output_logprobs, _, _ = self.decoder(encoded, y)
+        print("output logprobs ka shape :", output_logprobs.shape)
         loss = self.compute_loss(output_logprobs, y)
         return loss
 
