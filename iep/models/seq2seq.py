@@ -24,16 +24,22 @@ class Encoder(tf.keras.Model):
         self.embedding = tf.keras.layers.Embedding(
             encoder_vocab_size, wordvec_dim)
         self.encoder_rnn1 = tf.keras.layers.LSTM(
-            hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
+            hidden_dim,
+            dropout=rnn_dropout,
+            return_sequences=True,
+            return_state=True)
         self.encoder_rnn2 = tf.keras.layers.LSTM(
-            hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
+            hidden_dim,
+            dropout=rnn_dropout,
+            return_sequences=True,
+            return_state=True)
 
     def call(self, x, hidden):
         x = self.embedding(x)
         x, state_h, state_c = self.encoder_rnn1(x)
         #x = self.encoder_rnn1(x)
         #print("size of output : ", len(x))
-        #for i, item in enumerate(x):
+        # for i, item in enumerate(x):
         #    print("Shape of ", i, " : ", item.shape)
         state = [state_h, state_c]
         output, state_h, state_c = self.encoder_rnn2(x, initial_state=state)
@@ -53,33 +59,53 @@ class Decoder(tf.keras.Model):
             rnn_dropout):
         super(Decoder, self).__init__()
         self.hidden_dim = hidden_dim
-        self.decoder_embedding = tf.keras.layers.Embedding(decoder_vocab_size, wordvec_dim)
-        self.decoder_rnn1 = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
-        self.decoder_rnn2 = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout, return_sequences=True, return_state=True)
-        self.decoder_linear = tf.keras.layers.Dense(decoder_vocab_size, input_shape=(hidden_dim,))
+        self.decoder_embedding = tf.keras.layers.Embedding(
+            decoder_vocab_size, wordvec_dim)
+        self.decoder_rnn1 = tf.keras.layers.LSTM(
+            hidden_dim,
+            dropout=rnn_dropout,
+            return_sequences=True,
+            return_state=True)
+        self.decoder_rnn2 = tf.keras.layers.LSTM(
+            hidden_dim,
+            dropout=rnn_dropout,
+            return_sequences=True,
+            return_state=True)
+        self.decoder_linear = tf.keras.layers.Dense(
+            decoder_vocab_size, input_shape=(hidden_dim,))
 
     def call(self, hidden, y, encoded, N, H, T_out, V_out):
         print("T_out : ", T_out)
         y_embed = self.decoder_embedding(y)
         print("y_embed ka shape after embedding : ", y_embed.shape)
-        y_embed = tf.reshape(y_embed, [y_embed.shape[0], -1, y_embed.shape[-1]])
+        y_embed = tf.reshape(
+            y_embed, [y_embed.shape[0], -1, y_embed.shape[-1]])
         # encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
         print("Encoded ka shape : ", encoded.shape)
-        encoded_repeat = tf.broadcast_to(tf.reshape(encoded, [N, 1, H]), [N, T_out, H])
-        print("Encoded Repeat ka shape : ", encoded_repeat.shape, " y_embed ka shape : ", y_embed.shape)
+        encoded_repeat = tf.broadcast_to(
+            tf.reshape(
+                encoded, [
+                    N, 1, H]), [
+                N, T_out, H])
+        print(
+            "Encoded Repeat ka shape : ",
+            encoded_repeat.shape,
+            " y_embed ka shape : ",
+            y_embed.shape)
         rnn_input = tf.concat([encoded_repeat, y_embed], 2)
 
         x, state_h, state_c = self.decoder_rnn1(rnn_input)
         state = [state_h, state_c]
         output, state_h, state_c = self.decoder_rnn2(x, initial_state=state)
-        output_2d = tf.reshape(output, [N*T_out, H])
-        output_logprobs = tf.reshape(self.decoder_linear(output_2d), [N, T_out, V_out])
+        output_2d = tf.reshape(output, [N * T_out, H])
+        output_logprobs = tf.reshape(
+            self.decoder_linear(output_2d), [
+                N, T_out, V_out])
         return output_logprobs, state_h, state_c
 
     def initialize_hidden_state(self):
         return tf.zeros((self.hidden_dim, self.hidden_dim))
         # return tf.eye(self.hidden_dim, batch_shape=[64])
-
 
 
 class Seq2Seq(tf.keras.Model):
@@ -108,7 +134,7 @@ class Seq2Seq(tf.keras.Model):
         input_shape = [64, 46, 300]
 
         self.decoder_embed2 = tf.keras.layers.Embedding(
-             decoder_vocab_size, wordvec_dim)
+            decoder_vocab_size, wordvec_dim)
         # self.decoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)
         # self.decoder_rnn = tf.keras.layers.StackedRNNCells(
         #   decoder_cells, input_shape=(wordvec_dim + hidden_dim,))
@@ -183,7 +209,7 @@ class Seq2Seq(tf.keras.Model):
         print("idx Shape after broadcast ", idx.shape)
         t = gather_numpy(out, 1, idx)
         print(" t ka shape : ", t.shape)
-        
+
         return tf.reshape(t, [N, H])
 
     def decoder(self, encoded, y, h0=None, c0=None):
@@ -204,7 +230,8 @@ class Seq2Seq(tf.keras.Model):
             self.hidden_size,
             self.rnn_dropout)
         hidden = decoder_ob.initialize_hidden_state()
-        output_logprobs, ht, ct = decoder_ob(hidden, y, encoded, N, H, T_out, V_out)
+        output_logprobs, ht, ct = decoder_ob(
+            hidden, y, encoded, N, H, T_out, V_out)
 
         return output_logprobs, ht, ct
 
@@ -223,17 +250,31 @@ class Seq2Seq(tf.keras.Model):
     """
         self.multinomial_outputs = None
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
-        mask = y.data != self.NULL
+        print("V_in, V_out, D, H, L, N, T_in, T_out : ", V_in, V_out, D, H, L, N, T_in, T_out)
+        n = y.read_value().numpy()
+        print(" Y before masking  ka shape :", y.shape)
+        mask = tf.convert_to_tensor(np.where(n != 0, 1, 0), dtype=tf.int32)
+        print(" mask ka shape : ", mask.shape)
+        #mask = y.data != self.NULL
         y_mask_tf = tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
         y_mask = tf.Variable(y_mask_tf)
-        y_mask[:, 1:] = mask[:, 1:]
-        y_masked = y[y_mask]
+        print(" y_mask ka shape : ", y_mask.shape)
+        y_mask = y_mask[:, 1:].assign(mask[:, 1:])
+        #y_mask[:, 1:] = mask[:, 1:]
+        y_masked = tf.boolean_mask(y, y_mask)
+        #y_masked = y[y_mask]
+        print(" Y_masked ka shape :", y_masked.shape)
         out_mask_tf = tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
         out_mask = tf.Variable(out_mask_tf)
-        out_mask[:, :-1] = mask[:, 1:]
-        out_mask = out_mask.view(N, T_out, 1).expand(N, T_out, V_out)
-        out_masked = output_logprobs[out_mask].reshape(-1, V_out)
-        loss = tf.nn.softmax_cross_entropy_with_logits(out_masked, y_masked)
+        print("out_mask ka shape : ", out_mask.shape)
+        print("mask ka shape : ", mask.shape)
+        out_mask = out_mask[:, :-1].assign(mask[:, 1:])
+        out_mask = tf.broadcast_to(tf.reshape(out_mask, [N, T_out, 1]), [N, T_out, V_out])
+        print("out_mask ka shape after broadcast : ", out_mask.shape)
+        output_logprobs = tf.boolean_mask(output_logprobs, out_mask)
+        out_masked = tf.reshape(output_logprobs, [-1, V_out])
+        print(" out_masked ka shape :", out_masked.shape)
+        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(out_masked, y_masked)
         return loss
 
     def __call__(self, x, y):
@@ -323,6 +364,7 @@ class Seq2Seq(tf.keras.Model):
         # torch.autograd.backward(self.multinomial_outputs, grad_output,
         # retain_variables=True) #CHANGE
 
+
 def gather_numpy(t, dim, index):
     """
     Gathers values along an axis specified by dim.
@@ -338,8 +380,10 @@ def gather_numpy(t, dim, index):
     idx_xsection_shape = index.shape[:dim] + index.shape[dim + 1:]
     self_xsection_shape = t.shape[:dim] + t.shape[dim + 1:]
     if idx_xsection_shape != self_xsection_shape:
-        raise ValueError("Except for dimension " + str(dim) +
-                         ", all dimensions of index and self should be the same size")
+        raise ValueError(
+            "Except for dimension " +
+            str(dim) +
+            ", all dimensions of index and self should be the same size")
     data_swaped = np.swapaxes(t, 0, dim)
     index_swaped = np.swapaxes(index, 0, dim)
     #gathered = np.choose(index_swaped, data_swaped)
