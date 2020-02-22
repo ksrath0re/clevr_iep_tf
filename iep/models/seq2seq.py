@@ -38,9 +38,9 @@ class Encoder(tf.keras.Model):
         x = self.embedding(x)
         x, state_h, state_c = self.encoder_rnn1(x)
         #x = self.encoder_rnn1(x)
-        #print("size of output : ", len(x))
+        #p.rint("size of output : ", len(x))
         # for i, item in enumerate(x):
-        #    print("Shape of ", i, " : ", item.shape)
+        #    p.rint("Shape of ", i, " : ", item.shape)
         state = [state_h, state_c]
         output, state_h, state_c = self.encoder_rnn2(x, initial_state=state)
         return output, state_h, state_c
@@ -75,23 +75,23 @@ class Decoder(tf.keras.Model):
             decoder_vocab_size, input_shape=(hidden_dim,))
 
     def call(self, hidden, y, encoded, N, H, T_out, V_out):
-        print("T_out : ", T_out)
+        #print("T_out : ", T_out)
         y_embed = self.decoder_embedding(y)
-        print("y_embed ka shape after embedding : ", y_embed.shape)
+        #print("y_embed ka shape after embedding : ", y_embed.shape)
         y_embed = tf.reshape(
             y_embed, [y_embed.shape[0], -1, y_embed.shape[-1]])
         # encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
-        print("Encoded ka shape : ", encoded.shape)
+        #print("Encoded ka shape : ", encoded.shape)
         encoded_repeat = tf.broadcast_to(
             tf.reshape(
                 encoded, [
                     N, 1, H]), [
                 N, T_out, H])
-        print(
-            "Encoded Repeat ka shape : ",
-            encoded_repeat.shape,
-            " y_embed ka shape : ",
-            y_embed.shape)
+        #print(
+        #    "Encoded Repeat ka shape : ",
+        #    encoded_repeat.shape,
+        #    " y_embed ka shape : ",
+        #    y_embed.shape)
         rnn_input = tf.concat([encoded_repeat, y_embed], 2)
 
         x, state_h, state_c = self.decoder_rnn1(rnn_input)
@@ -191,10 +191,10 @@ class Seq2Seq(tf.keras.Model):
         return x, tf.Variable(idx)
 
     def encoder(self, x):
-        print("Shape of X :  ", x.shape)
+        #print("Shape of X :  ", x.shape)
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
         x, idx = self.before_rnn(x)
-        print("Shape of X after before_rnn:", x.shape)
+        #print("Shape of X after before_rnn:", x.shape)
         encoder_ob = Encoder(
             self.encoder_vocab_size,
             self.wordvec_dim,
@@ -204,21 +204,21 @@ class Seq2Seq(tf.keras.Model):
         out, _, _ = encoder_ob(x, hidden)
 
         # Pull out the hidden state for the last non-null value in each input
-        print("idx Shape :", idx.shape, " out shape : ", out.shape)
+        #print("idx Shape :", idx.shape, " out shape : ", out.shape)
         idx = tf.broadcast_to(tf.reshape(idx, [N, 1, 1]), [N, 1, H])
-        print("idx Shape after broadcast ", idx.shape)
+        #print("idx Shape after broadcast ", idx.shape)
         t = gather_numpy(out, 1, idx)
-        print(" t ka shape : ", t.shape)
+        #print(" t ka shape : ", t.shape)
 
         return tf.reshape(t, [N, H])
 
     def decoder(self, encoded, y, h0=None, c0=None):
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
-        print("T_out in decoder starting : ", T_out)
-        print("Shape of Y after before_rnn:", y.shape)
+        #print("T_out in decoder starting : ", T_out)
+        #print("Shape of Y after before_rnn:", y.shape)
         if T_out > 1:
             y, _ = self.before_rnn(y)
-        print("Shape of Y after before_rnn:", y.shape)
+        #print("Shape of Y after before_rnn:", y.shape)
 
         # if h0 is None:
         #     h0 = tf.Variable(tf.zeros([L, N, H], encoded.dtype))
@@ -250,50 +250,50 @@ class Seq2Seq(tf.keras.Model):
     """
         self.multinomial_outputs = None
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
-        print("V_in, V_out, D, H, L, N, T_in, T_out : ",
-              V_in, V_out, D, H, L, N, T_in, T_out)
+        #print("V_in, V_out, D, H, L, N, T_in, T_out : ",
+        #      V_in, V_out, D, H, L, N, T_in, T_out)
         n = y.read_value().numpy()
-        print(" Y before masking  ka shape :", y.shape)
+        #print(" Y before masking  ka shape :", y.shape)
         mask = tf.convert_to_tensor(np.where(n != 0, 1, 0), dtype=tf.int32)
-        print(" mask ka shape : ", mask.shape)
+        #print(" mask ka shape : ", mask.shape)
         #mask = y.data != self.NULL
         y_mask_tf = tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
         y_mask = tf.Variable(y_mask_tf)
-        print(" y_mask ka shape : ", y_mask.shape)
+        #print(" y_mask ka shape : ", y_mask.shape)
         y_mask = y_mask[:, 1:].assign(mask[:, 1:])
         #y_mask[:, 1:] = mask[:, 1:]
         y_masked = tf.boolean_mask(y, y_mask)
         #y_masked = y[y_mask]
-        print(" Y_masked ka shape :", y_masked.shape)
+        #print(" Y_masked ka shape :", y_masked.shape)
         out_mask_tf = tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
         out_mask = tf.Variable(out_mask_tf)
-        print("out_mask ka shape : ", out_mask.shape)
-        print("mask ka shape : ", mask.shape)
+        #print("out_mask ka shape : ", out_mask.shape)
+        #print("mask ka shape : ", mask.shape)
         out_mask = out_mask[:, :-1].assign(mask[:, 1:])
         out_mask = tf.broadcast_to(
             tf.reshape(
                 out_mask, [
                     N, T_out, 1]), [
                 N, T_out, V_out])
-        print("out_mask ka shape after broadcast : ", out_mask.shape)
+        #print("out_mask ka shape after broadcast : ", out_mask.shape)
         output_logprobs = tf.boolean_mask(output_logprobs, out_mask)
         out_masked = tf.reshape(output_logprobs, [-1, V_out])
-        print(" out_masked ka shape :", out_masked.shape)
-        print(" y_masked :", y_masked)
+        #print(" out_masked ka shape :", out_masked.shape)
+        #print(" y_masked :", y_masked)
         y_masked = tf.dtypes.cast(y_masked, dtype=tf.int32)
-        print(" y_masked changed :", y_masked)
+        #print(" y_masked changed :", y_masked)
         # for i in range(y_masked.shape[0]):
         #    print("out_mask for ", i, " : ", out_masked[i], " and true y : ", y_masked[i])
         #y_masked = tf.reshape(y_masked, [-1, 1])
         loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=out_masked, labels=y_masked))
-        print("loss : ", loss, " y_masked size : ", y_masked.shape)
+        #print("loss : ", loss, " y_masked size : ", y_masked.shape)
         return loss
 
     def __call__(self, x, y):
         encoded = self.encoder(x)
-        print("Encoded ka shape : ", encoded.shape)
+        #print("Encoded ka shape : ", encoded.shape)
         output_logprobs, _, _ = self.decoder(encoded, y)
-        print("output logprobs ka shape :", output_logprobs.shape)
+        #print("output logprobs ka shape :", output_logprobs.shape)
         loss = self.compute_loss(output_logprobs, y)
         return loss
 

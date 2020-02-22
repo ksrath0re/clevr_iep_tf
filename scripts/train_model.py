@@ -29,7 +29,7 @@ from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.callbacks import EarlyStopping, Callback, ModelCheckpoint
 
 parser = argparse.ArgumentParser()
-
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # Input data
 parser.add_argument('--train_question_h5', default='data/train_questions.h5')
 parser.add_argument('--train_features_h5', default='data/train_features.h5')
@@ -101,7 +101,7 @@ parser.add_argument('--classifier_dropout', default=0, type=float)
 
 # Optimization options
 parser.add_argument('--batch_size', default=64, type=int)
-parser.add_argument('--num_iterations', default=100000, type=int)
+parser.add_argument('--num_iterations', default=100, type=int)
 parser.add_argument('--learning_rate', default=5e-4, type=float)
 parser.add_argument('--reward_decay', default=0.9, type=float)
 
@@ -179,8 +179,10 @@ def batch_creater(data, batch_size, drop_last):
     j = 0
     big_batch = []
     print("Length of data set : ", len(data))
+    trimmed_data = len(data)/60
+    print("trimmed length : ", int(trimmed_data))
     # print("Batch Size : ", batch_size)
-    for i in range(len(data)):
+    for i in range(int(trimmed_data)):
         for k in range(6):
             batch[k].append(data[i][k])
         if len(batch[0]) == batch_size:
@@ -226,7 +228,7 @@ def train_loop(args, train_loader, val_loader):
         print('Here is the program generator:')
         # program_generator.build(input_shape=[46,])
         # program_generator.compile(optimizer='adam', loss='mse')
-        # print(program_generator.summary())
+        #i print(program_generator.summary())
     if args.model_type == 'EE' or args.model_type == 'PG+EE':
         execution_engine, ee_kwargs = get_execution_engine(args)
         ee_optimizer = optimizers.Adam(args.learning_rate)
@@ -255,6 +257,7 @@ def train_loop(args, train_loader, val_loader):
         total_loss = 0
         epoch += 1
         print('Starting epoch %d' % epoch)
+        print("value of t :", t)
         # train_loader_data = get_data(train_loader)
         # print("train data loader length :", len(train_loader_data))
         # print(train_loader[0].shape)
@@ -269,10 +272,10 @@ def train_loop(args, train_loader, val_loader):
                     batch[3]), to_tensor(
                     batch[4]), batch[5]
 
-                print("Questions : ", questions.shape)
-                print("Features :", feats.shape)
-                print(" Answers : ", answers.shape)
-                print(" prgrams : ", programs.shape)
+                #print("Questions : ", questions.shape)
+                #print("Features :", feats.shape)
+                #print(" Answers : ", answers.shape)
+                #print(" prgrams : ", programs.shape)
                 print("----------------")
 
                 questions_var = tf.Variable(questions)
@@ -290,7 +293,9 @@ def train_loop(args, train_loader, val_loader):
             gradients = tape.gradient(batch_loss, variables)
             pg_optimizer.apply_gradients(zip(gradients), variables)
 
-            print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, batch, batch_loss.numpy()))
+            print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
+        if t == args.num_iterations:
+            break
                     # program_generator.compile(optimizer=pg_optimizer, loss=loss)
                     # ques = np.asarray(questions_var.read_value())
                     # prog = np.asarray(programs_var.read_value())
@@ -386,8 +391,8 @@ def train_loop(args, train_loader, val_loader):
             #     with open(args.checkpoint_path + '.json', 'w') as f:
             #         json.dump(checkpoint, f)
 
-            if t == args.num_iterations:
-                break
+        if t == args.num_iterations:
+            break
 
 
 def parse_int_list(s):
