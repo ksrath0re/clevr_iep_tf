@@ -253,6 +253,7 @@ def train_loop(args, train_loader, val_loader):
     data_load = batch_creater(train_loader, batch_size, False)
     print("Data load length :", len(data_load))
     # print(data_load[0][0])
+
     while t < args.num_iterations:
         total_loss = 0
         epoch += 1
@@ -286,6 +287,10 @@ def train_loop(args, train_loader, val_loader):
 
                 reward = None
                 if args.model_type == 'PG':
+                    checkpoint_dir = './training_checkpoints'
+                    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+                    checkpoint = tf.train.Checkpoint(optimizer=pg_optimizer,
+                                                     program_generator=program_generator)
                     # Train program generator with ground-truth programs+++
                     batch_loss = program_generator(questions_var, programs_var)
             total_loss += batch_loss
@@ -294,6 +299,8 @@ def train_loop(args, train_loader, val_loader):
             pg_optimizer.apply_gradients(zip(gradients), variables)
 
             print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
+        if epoch % 2 == 0:
+            checkpoint.save(file_prefix=checkpoint_prefix)
         if t == args.num_iterations:
             break
                     # program_generator.compile(optimizer=pg_optimizer, loss=loss)
