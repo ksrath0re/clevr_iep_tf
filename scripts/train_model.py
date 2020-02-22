@@ -179,7 +179,7 @@ def batch_creater(data, batch_size, drop_last):
     j = 0
     big_batch = []
     print("Length of data set : ", len(data))
-    #print("Batch Size : ", batch_size)
+    # print("Batch Size : ", batch_size)
     for i in range(len(data)):
         for k in range(6):
             batch[k].append(data[i][k])
@@ -196,6 +196,12 @@ def batch_creater(data, batch_size, drop_last):
 
 def to_tensor(nd_array):
     return tf.convert_to_tensor(nd_array, dtype=tf.float32)
+
+
+def loss_function(real, pred):
+    mask = 1 - np.equal(real, 0)
+    loss_ = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=real, logits=pred) * mask
+    return tf.reduce_mean(loss_)
 
 
 def train_loop(args, train_loader, val_loader):
@@ -219,8 +225,8 @@ def train_loop(args, train_loader, val_loader):
         pg_optimizer = optimizers.Adam(args.learning_rate)
         print('Here is the program generator:')
         # program_generator.build(input_shape=[46,])
-        #program_generator.compile(optimizer='adam', loss='mse')
-        #print(program_generator.summary())
+        # program_generator.compile(optimizer='adam', loss='mse')
+        # print(program_generator.summary())
     if args.model_type == 'EE' or args.model_type == 'PG+EE':
         execution_engine, ee_kwargs = get_execution_engine(args)
         ee_optimizer = optimizers.Adam(args.learning_rate)
@@ -238,7 +244,7 @@ def train_loop(args, train_loader, val_loader):
     # set_mode('train', [program_generator, execution_engine, baseline_model])
 
     print('train_loader has %d samples' % len(train_loader))
-    #train_loader = train_loader[:256]
+    # train_loader = train_loader[:256]
     print('train_loader has %d samples' % len(train_loader))
     print('val_loader has %d samples' % len(val_loader))
     # data_sampler = iter(range(len(train_loader)))
@@ -246,60 +252,69 @@ def train_loop(args, train_loader, val_loader):
     print("Data load length :", len(data_load))
     # print(data_load[0][0])
     while t < args.num_iterations:
+        total_loss = 0
         epoch += 1
         print('Starting epoch %d' % epoch)
         # train_loader_data = get_data(train_loader)
         # print("train data loader length :", len(train_loader_data))
         # print(train_loader[0].shape)
         # print(train_loader[0])
-        for batch in data_load:
-            t += 1
-            questions, _, feats, answers, programs, _ = to_tensor(
-                batch[0]), batch[1], to_tensor(
-                batch[2]), to_tensor(
-                batch[3]), to_tensor(
-                batch[4]), batch[5]
+        for run_num, batch in enumerate(data_load):
+            batch_loss = 0
+            with tf.GradientTape() as tape:
+                t += 1
+                questions, _, feats, answers, programs, _ = to_tensor(
+                    batch[0]), batch[1], to_tensor(
+                    batch[2]), to_tensor(
+                    batch[3]), to_tensor(
+                    batch[4]), batch[5]
 
-            print("Questions : ", questions.shape)
-            print("Features :", feats.shape)
-            print(" Answers : ", answers.shape)
-            print(" prgrams : ", programs.shape)
-            print("----------------")
+                print("Questions : ", questions.shape)
+                print("Features :", feats.shape)
+                print(" Answers : ", answers.shape)
+                print(" prgrams : ", programs.shape)
+                print("----------------")
 
-            questions_var = tf.Variable(questions)
-            feats_var = tf.Variable(feats)
-            answers_var = tf.Variable(answers)
-            if programs[0] is not None:
-                programs_var = tf.Variable(programs)
+                questions_var = tf.Variable(questions)
+                feats_var = tf.Variable(feats)
+                answers_var = tf.Variable(answers)
+                if programs[0] is not None:
+                    programs_var = tf.Variable(programs)
 
-            reward = None
-            if args.model_type == 'PG':
-                # Train program generator with ground-truth programs+++
-                loss = program_generator(questions_var, programs_var)
-                program_generator.compile(optimizer=pg_optimizer, loss=loss)
-                ques = np.asarray(questions_var.read_value())
-                prog = np.asarray(programs_var.read_value())
-                history = program_generator.fit(
-                    x=ques,
-                    y=prog,
-                    batch_size=args.batch_size,
-                    epochs=10,
-                    verbose=0,
-                    callbacks=[LossAndErrorPrintingCallback(), checkpoint])
+                reward = None
+                if args.model_type == 'PG':
+                    # Train program generator with ground-truth programs+++
+                    batch_loss = program_generator(questions_var, programs_var)
+            total_loss += batch_loss
+            variables = program_generator.variables
+            gradients = tape.gradient(batch_loss, variables)
+            pg_optimizer.apply_gradients(zip(gradients), variables)
 
-            elif args.model_type == 'EE':
-                # Train execution engine with ground-truth programs
-                scores = execution_engine(feats_var, programs_var)
-                loss = tf.nn.softmax_cross_entropy_with_logits(
-                    scores, answers_var)
-                execution_engine.compile(optimizer=ee_optimizer, loss=loss)
-                history = execution_engine.fit(
-                    questions_var,
-                    to_categorical(answers_var),
-                    batch_size=args.batch_size,
-                    epochs=10,
-                    verbose=0,
-                    callbacks=[LossAndErrorPrintingCallback(), checkpoint])
+            print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, batch, batch_loss.numpy()))
+                    # program_generator.compile(optimizer=pg_optimizer, loss=loss)
+                    # ques = np.asarray(questions_var.read_value())
+                    # prog = np.asarray(programs_var.read_value())
+                    # history = program_generator.fit(
+                    #     x=ques,
+                    #     y=prog,
+                    #     batch_size=args.batch_size,
+                    #     epochs=10,
+                    #     verbose=0,
+                    #     callbacks=[LossAndErrorPrintingCallback(), checkpoint])
+
+                # elif args.model_type == 'EE':
+                #     # Train execution engine with ground-truth programs
+                #     scores = execution_engine(feats_var, programs_var)
+                #     loss = tf.nn.softmax_cross_entropy_with_logits(
+                #         scores, answers_var)
+                #     execution_engine.compile(optimizer=ee_optimizer, loss=loss)
+                #     history = execution_engine.fit(
+                #         questions_var,
+                #         to_categorical(answers_var),
+                #         batch_size=args.batch_size,
+                #         epochs=10,
+                #         verbose=0,
+                #         callbacks=[LossAndErrorPrintingCallback(), checkpoint])
 
             # elif args.model_type == 'PG+EE':
             #     programs_pred = program_generator.reinforce_sample(questions_var)
