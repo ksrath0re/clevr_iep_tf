@@ -277,9 +277,11 @@ def train_loop(args, train_loader, val_loader):
                 # Train program generator with ground-truth programs+++
                 loss = program_generator(questions_var, programs_var)
                 program_generator.compile(optimizer=pg_optimizer, loss=loss)
+                ques = np.asarray(questions_var.read_value())
+                prog = np.asarray(programs_var.read_value())
                 history = program_generator.fit(
-                    questions_var,
-                    to_categorical(answers_var),
+                    x=ques,
+                    y=prog,
                     batch_size=args.batch_size,
                     epochs=10,
                     verbose=0,

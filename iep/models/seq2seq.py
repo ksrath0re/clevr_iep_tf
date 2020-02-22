@@ -250,7 +250,8 @@ class Seq2Seq(tf.keras.Model):
     """
         self.multinomial_outputs = None
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
-        print("V_in, V_out, D, H, L, N, T_in, T_out : ", V_in, V_out, D, H, L, N, T_in, T_out)
+        print("V_in, V_out, D, H, L, N, T_in, T_out : ",
+              V_in, V_out, D, H, L, N, T_in, T_out)
         n = y.read_value().numpy()
         print(" Y before masking  ka shape :", y.shape)
         mask = tf.convert_to_tensor(np.where(n != 0, 1, 0), dtype=tf.int32)
@@ -269,12 +270,23 @@ class Seq2Seq(tf.keras.Model):
         print("out_mask ka shape : ", out_mask.shape)
         print("mask ka shape : ", mask.shape)
         out_mask = out_mask[:, :-1].assign(mask[:, 1:])
-        out_mask = tf.broadcast_to(tf.reshape(out_mask, [N, T_out, 1]), [N, T_out, V_out])
+        out_mask = tf.broadcast_to(
+            tf.reshape(
+                out_mask, [
+                    N, T_out, 1]), [
+                N, T_out, V_out])
         print("out_mask ka shape after broadcast : ", out_mask.shape)
         output_logprobs = tf.boolean_mask(output_logprobs, out_mask)
         out_masked = tf.reshape(output_logprobs, [-1, V_out])
         print(" out_masked ka shape :", out_masked.shape)
-        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(out_masked, y_masked)
+        print(" y_masked :", y_masked)
+        y_masked = tf.dtypes.cast(y_masked, dtype=tf.int32)
+        print(" y_masked changed :", y_masked)
+        # for i in range(y_masked.shape[0]):
+        #    print("out_mask for ", i, " : ", out_masked[i], " and true y : ", y_masked[i])
+        #y_masked = tf.reshape(y_masked, [-1, 1])
+        loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=out_masked, labels=y_masked))
+        print("loss : ", loss, " y_masked size : ", y_masked.shape)
         return loss
 
     def __call__(self, x, y):
