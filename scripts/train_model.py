@@ -179,10 +179,10 @@ def batch_creater(data, batch_size, drop_last):
     j = 0
     big_batch = []
     print("Length of data set : ", len(data))
-    trimmed_data = len(data)/60
-    print("trimmed length : ", int(trimmed_data))
+    #trimmed_data = len(data)/60
+    #print("trimmed length : ", int(trimmed_data))
     # print("Batch Size : ", batch_size)
-    for i in range(int(trimmed_data)):
+    for i in range(len(data)):
         for k in range(6):
             batch[k].append(data[i][k])
         if len(batch[0]) == batch_size:
@@ -202,7 +202,8 @@ def to_tensor(nd_array):
 
 def loss_function(real, pred):
     mask = 1 - np.equal(real, 0)
-    loss_ = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=real, logits=pred) * mask
+    loss_ = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        labels=real, logits=pred) * mask
     return tf.reduce_mean(loss_)
 
 
@@ -228,7 +229,7 @@ def train_loop(args, train_loader, val_loader):
         print('Here is the program generator:')
         # program_generator.build(input_shape=[46,])
         # program_generator.compile(optimizer='adam', loss='mse')
-        #i print(program_generator.summary())
+        # i print(program_generator.summary())
     if args.model_type == 'EE' or args.model_type == 'PG+EE':
         execution_engine, ee_kwargs = get_execution_engine(args)
         ee_optimizer = optimizers.Adam(args.learning_rate)
@@ -242,7 +243,10 @@ def train_loop(args, train_loader, val_loader):
     }
     t, epoch, reward_moving_average = 0, 0, 0
     batch_size = 64
-
+    checkpoint_dir = './training_checkpoints'
+    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+    checkpoint = tf.train.Checkpoint(optimizer=pg_optimizer,
+                                     program_generator=program_generator)
     # set_mode('train', [program_generator, execution_engine, baseline_model])
 
     print('train_loader has %d samples' % len(train_loader))
@@ -287,10 +291,10 @@ def train_loop(args, train_loader, val_loader):
 
                 reward = None
                 if args.model_type == 'PG':
-                    checkpoint_dir = './training_checkpoints'
-                    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
-                    checkpoint = tf.train.Checkpoint(optimizer=pg_optimizer,
-                                                     program_generator=program_generator)
+                    #checkpoint_dir = './training_checkpoints'
+                    #checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+                    # checkpoint = tf.train.Checkpoint(optimizer=pg_optimizer,
+                    #                                 program_generator=program_generator)
                     # Train program generator with ground-truth programs+++
                     batch_loss = program_generator(questions_var, programs_var)
             total_loss += batch_loss
@@ -298,35 +302,37 @@ def train_loop(args, train_loader, val_loader):
             gradients = tape.gradient(batch_loss, variables)
             pg_optimizer.apply_gradients(zip(gradients), variables)
 
-            print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
+            print(
+                'Epoch {} Batch No. {} Loss {:.4f}'.format(
+                    epoch, run_num, batch_loss.numpy()))
         if epoch % 2 == 0:
             checkpoint.save(file_prefix=checkpoint_prefix)
         if t == args.num_iterations:
             break
-                    # program_generator.compile(optimizer=pg_optimizer, loss=loss)
-                    # ques = np.asarray(questions_var.read_value())
-                    # prog = np.asarray(programs_var.read_value())
-                    # history = program_generator.fit(
-                    #     x=ques,
-                    #     y=prog,
-                    #     batch_size=args.batch_size,
-                    #     epochs=10,
-                    #     verbose=0,
-                    #     callbacks=[LossAndErrorPrintingCallback(), checkpoint])
+            # program_generator.compile(optimizer=pg_optimizer, loss=loss)
+            # ques = np.asarray(questions_var.read_value())
+            # prog = np.asarray(programs_var.read_value())
+            # history = program_generator.fit(
+            #     x=ques,
+            #     y=prog,
+            #     batch_size=args.batch_size,
+            #     epochs=10,
+            #     verbose=0,
+            #     callbacks=[LossAndErrorPrintingCallback(), checkpoint])
 
-                # elif args.model_type == 'EE':
-                #     # Train execution engine with ground-truth programs
-                #     scores = execution_engine(feats_var, programs_var)
-                #     loss = tf.nn.softmax_cross_entropy_with_logits(
-                #         scores, answers_var)
-                #     execution_engine.compile(optimizer=ee_optimizer, loss=loss)
-                #     history = execution_engine.fit(
-                #         questions_var,
-                #         to_categorical(answers_var),
-                #         batch_size=args.batch_size,
-                #         epochs=10,
-                #         verbose=0,
-                #         callbacks=[LossAndErrorPrintingCallback(), checkpoint])
+            # elif args.model_type == 'EE':
+            #     # Train execution engine with ground-truth programs
+            #     scores = execution_engine(feats_var, programs_var)
+            #     loss = tf.nn.softmax_cross_entropy_with_logits(
+            #         scores, answers_var)
+            #     execution_engine.compile(optimizer=ee_optimizer, loss=loss)
+            #     history = execution_engine.fit(
+            #         questions_var,
+            #         to_categorical(answers_var),
+            #         batch_size=args.batch_size,
+            #         epochs=10,
+            #         verbose=0,
+            #         callbacks=[LossAndErrorPrintingCallback(), checkpoint])
 
             # elif args.model_type == 'PG+EE':
             #     programs_pred = program_generator.reinforce_sample(questions_var)
