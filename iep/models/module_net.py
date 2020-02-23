@@ -62,7 +62,7 @@ def build_classifier(module_C, module_H, module_W, num_answers,
     return model
 
 
-class ModuleNet(tf.Module):
+class ModuleNet(tf.keras.Model):
     def __init__(self, vocab, feature_dim=(1024, 14, 14),
                  stem_num_layers=2,
                  stem_batchnorm=False,
