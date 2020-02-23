@@ -220,11 +220,15 @@ def train_loop(args, train_loader, val_loader):
                                  save_best_only=True,
                                  mode='min',
                                  load_weights_on_restart=True)
+    checkpoint_dir = './training_checkpoints'
+    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
     # Set up model
     if args.model_type == 'PG' or args.model_type == 'PG+EE':
         program_generator, pg_kwargs = get_program_generator(args)
         pg_optimizer = optimizers.Adam(args.learning_rate)
         print('Here is the program generator:')
+        checkpoint = tf.train.Checkpoint(optimizer=pg_optimizer,
+                                         program_generator=program_generator)
         # program_generator.build(input_shape=[46,])
         # program_generator.compile(optimizer='adam', loss='mse')
         print(program_generator)
@@ -233,6 +237,8 @@ def train_loop(args, train_loader, val_loader):
         ee_optimizer = optimizers.Adam(args.learning_rate)
         print('Here is the execution engine:')
         print(execution_engine)
+        checkpoint = tf.train.Checkpoint(optimizer=ee_optimizer,
+                                         execution_engine=execution_engine)
 
     stats = {
         'train_losses': [], 'train_rewards': [], 'train_losses_ts': [],
@@ -241,10 +247,7 @@ def train_loop(args, train_loader, val_loader):
     }
     t, epoch, reward_moving_average = 0, 0, 0
     batch_size = 64
-    checkpoint_dir = './training_checkpoints'
-    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
-    checkpoint = tf.train.Checkpoint(optimizer=pg_optimizer,
-                                     program_generator=program_generator)
+
     # set_mode('train', [program_generator, execution_engine, baseline_model])
 
     print('train_loader has %d samples' % len(train_loader))
