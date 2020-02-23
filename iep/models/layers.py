@@ -1,10 +1,8 @@
 import tensorflow as tf
 import tensorflow.nn as nn
 
-# from tensorflow.keras import
 
-
-class ResidualBlock(tf.Module):
+class ResidualBlock(tf.keras.Model):
     def __init__(self, in_dim, out_dim=None, with_residual=True, with_batchnorm=True):
         if out_dim is None:
             out_dim = in_dim
@@ -13,8 +11,8 @@ class ResidualBlock(tf.Module):
         self.conv2 = tf.keras.layers.Conv2D(in_channels=out_dim, out_channels=out_dim, kernel_size=(3, 3), padding=1)
         self.with_batchnorm = with_batchnorm
         if with_batchnorm:
-            self.bn1 = nn.batch_normalization(out_dim)
-            self.bn2 = nn.batch_normalization(out_dim)
+            self.bn1 = tf.nn.batch_normalization(out_dim)
+            self.bn2 = tf.nn.batch_normalization(out_dim)
         self.with_residual = with_residual
         if in_dim == out_dim or not with_residual:
             self.proj = None
@@ -35,12 +33,12 @@ class ResidualBlock(tf.Module):
         return out
 
 
-class GlobalAveragePool(tf.Module):
+class GlobalAveragePool(tf.keras.Model):
     def __call__(self, x):
-        N, C = x.size(0), x.size(1)
-        return x.reshape(N, C, -1).mean(2).squeeze(2)
+        N, C = tf.shape(x)
+        return tf.squeeze(tf.reshape(x, [N, C, -1]).mean(2), [2])
 
 
-class Flatten(tf.Module):
+class Flatten(tf.keras.Model):
     def __call__(self, x):
-        return x.reshape(x.size(0), -1)
+        return tf.reshape(x, [x.size(0), -1])
