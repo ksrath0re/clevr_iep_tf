@@ -21,6 +21,7 @@ import iep.utils as utils
 import iep.preprocess
 from iep.data import ClevrDataLoader
 from iep.models.seq2seq import Seq2Seq
+from iep.models.module_net import ModuleNet
 from tensorflow.keras import optimizers
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.callbacks import EarlyStopping, Callback, ModelCheckpoint
@@ -197,10 +198,10 @@ def to_tensor(nd_array):
     return tf.convert_to_tensor(nd_array, dtype=tf.float32)
 
 
-def loss_function(real, pred):
-    mask = 1 - np.equal(real, 0)
+def loss_function(pred, real):
+    # mask = 1 - np.equal(real, 0)
     loss_ = tf.nn.sparse_softmax_cross_entropy_with_logits(
-        labels=real, logits=pred) * mask
+        labels=real, logits=pred)
     return tf.reduce_mean(loss_)
 
 
@@ -289,6 +290,15 @@ def train_loop(args, train_loader, val_loader):
                     gradients = tape.gradient(batch_loss, variables)
                     pg_optimizer.apply_gradients(zip(gradients), variables)
 
+                if args.model_type == 'EE':
+                    # Train program generator with ground-truth programs+++
+                    print("Training program generator with ground-truth programs ... ")
+                    scores = execution_engine(feats_var, programs_var)
+                    batch_loss = loss_function(scores, answers_var)
+                    total_loss += batch_loss
+                    variables = execution_engine.variables
+                    gradients = tape.gradient(batch_loss, variables)
+                    ee_optimizer.apply_gradients(zip(gradients), variables)
             print(
                 'Epoch {} Batch No. {} Loss {:.4f}'.format(
                     epoch, run_num, batch_loss.numpy()))
@@ -423,6 +433,7 @@ def get_program_generator(args):
 
 
 def get_execution_engine(args):
+    print("Initiating Execution Engine process")
     vocab = utils.load_vocab(args.vocab_json)
     kwargs = {
         'vocab': vocab,
@@ -440,68 +451,6 @@ def get_execution_engine(args):
     }
     ee = ModuleNet(**kwargs)
     return ee, kwargs
-
-
-def get_baseline_model(args):
-    vocab = utils.load_vocab(args.vocab_json)
-    if args.baseline_start_from is not None:
-        model, kwargs = utils.load_baseline(args.baseline_start_from)
-    elif args.model_type == 'LSTM':
-        kwargs = {
-            'vocab': vocab,
-            'rnn_wordvec_dim': args.rnn_wordvec_dim,
-            'rnn_dim': args.rnn_hidden_dim,
-            'rnn_num_layers': args.rnn_num_layers,
-            'rnn_dropout': args.rnn_dropout,
-            'fc_dims': parse_int_list(args.classifier_fc_dims),
-            'fc_use_batchnorm': args.classifier_batchnorm == 1,
-            'fc_dropout': args.classifier_dropout,
-        }
-        model = LstmModel(**kwargs)
-    elif args.model_type == 'CNN+LSTM':
-        kwargs = {
-            'vocab': vocab,
-            'rnn_wordvec_dim': args.rnn_wordvec_dim,
-            'rnn_dim': args.rnn_hidden_dim,
-            'rnn_num_layers': args.rnn_num_layers,
-            'rnn_dropout': args.rnn_dropout,
-            'cnn_feat_dim': parse_int_list(args.feature_dim),
-            'cnn_num_res_blocks': args.cnn_num_res_blocks,
-            'cnn_res_block_dim': args.cnn_res_block_dim,
-            'cnn_proj_dim': args.cnn_proj_dim,
-            'cnn_pooling': args.cnn_pooling,
-            'fc_dims': parse_int_list(args.classifier_fc_dims),
-            'fc_use_batchnorm': args.classifier_batchnorm == 1,
-            'fc_dropout': args.classifier_dropout,
-        }
-        model = CnnLstmModel(**kwargs)
-    elif args.model_type == 'CNN+LSTM+SA':
-        kwargs = {
-            'vocab': vocab,
-            'rnn_wordvec_dim': args.rnn_wordvec_dim,
-            'rnn_dim': args.rnn_hidden_dim,
-            'rnn_num_layers': args.rnn_num_layers,
-            'rnn_dropout': args.rnn_dropout,
-            'cnn_feat_dim': parse_int_list(args.feature_dim),
-            'stacked_attn_dim': args.stacked_attn_dim,
-            'num_stacked_attn': args.num_stacked_attn,
-            'fc_dims': parse_int_list(args.classifier_fc_dims),
-            'fc_use_batchnorm': args.classifier_batchnorm == 1,
-            'fc_dropout': args.classifier_dropout,
-        }
-        model = CnnLstmSaModel(**kwargs)
-    if model.rnn.token_to_idx != vocab['question_token_to_idx']:
-        # Make sure new vocab is superset of old
-        for k, v in model.rnn.token_to_idx.items():
-            assert k in vocab['question_token_to_idx']
-            assert vocab['question_token_to_idx'][k] == v
-        for token, idx in vocab['question_token_to_idx'].items():
-            model.rnn.token_to_idx[token] = idx
-        kwargs['vocab'] = vocab
-        model.rnn.expand_vocab(vocab['question_token_to_idx'])
-    model.cuda()
-    model.train()
-    return model, kwargs
 
 
 def set_mode(mode, models):

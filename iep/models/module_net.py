@@ -26,8 +26,10 @@ def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True):
             layers.append(tf.keras.layers.BatchNormalization())
         layers.append(tf.keras.layers.ReLU())
         prev_dim = module_dim
+        print("Added Layer #", i)
 
     model = tf.keras.Sequential(layers=layers)
+    print("Model Created!")
     return model
 
 
@@ -76,7 +78,7 @@ class ModuleNet(tf.keras.Model):
                  classifier_dropout=0,
                  verbose=True):
         super(ModuleNet, self).__init__()
-
+        print("Building stem ...")
         self.stem = build_stem(feature_dim[0], module_dim,
                                num_layers=stem_num_layers,
                                with_batchnorm=stem_batchnorm)
@@ -87,6 +89,7 @@ class ModuleNet(tf.keras.Model):
 
         num_answers = len(vocab['answer_idx_to_token'])
         module_H, module_W = feature_dim[1], feature_dim[2]
+        print("Time to Build classifier")
         self.classifier = build_classifier(module_dim, module_H, module_W, num_answers,
                                            classifier_fc_layers,
                                            classifier_proj_dim,
