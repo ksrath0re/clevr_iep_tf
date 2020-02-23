@@ -1,5 +1,4 @@
 import tensorflow as tf
-import tensorflow.nn as nn
 
 
 class ResidualBlock(tf.keras.Model):
@@ -7,8 +6,8 @@ class ResidualBlock(tf.keras.Model):
         if out_dim is None:
             out_dim = in_dim
         super(ResidualBlock, self).__init__()
-        self.conv1 = tf.keras.layers.Conv2D(out_channels=out_dim, kernel_size=(3, 3), padding=1, input_shape=in_dim)
-        self.conv2 = tf.keras.layers.Conv2D(out_channels=out_dim, kernel_size=(3, 3), padding=1, input_shape=out_dim)
+        self.conv1 = tf.keras.layers.Conv2D(out_dim, kernel_size=(3, 3), padding='same')
+        self.conv2 = tf.keras.layers.Conv2D(out_dim, kernel_size=(3, 3), padding='same')
         self.with_batchnorm = with_batchnorm
         if with_batchnorm:
             self.bn1 = tf.nn.batch_normalization(out_dim)
@@ -17,7 +16,7 @@ class ResidualBlock(tf.keras.Model):
         if in_dim == out_dim or not with_residual:
             self.proj = None
         else:
-            self.proj = tf.keras.layers.Conv2D(out_dim, kernel_size=(1, 1), input_shape=in_dim)
+            self.proj = tf.keras.layers.Conv2D(out_dim, kernel_size=(1, 1))
 
     def __call__(self, x):
         if self.with_batchnorm:

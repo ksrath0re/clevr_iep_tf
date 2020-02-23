@@ -6,7 +6,7 @@ import tensorflow as tf
 class ConcatBlock(tf.Module):
     def __init__(self, dim, with_residual=True, with_batchnorm=True):
         super(ConcatBlock, self).__init__()
-        self.proj = tf.keras.layers.Conv2D(dim, kernel_size=(1, 1), padding=0, input_shape=2 * dim)
+        self.proj = tf.keras.layers.Conv2D(dim, kernel_size=(1, 1), padding=0)
         self.res_block = ResidualBlock(dim, with_residual=with_residual,
                                        with_batchnorm=with_batchnorm)
 
@@ -18,11 +18,12 @@ class ConcatBlock(tf.Module):
 
 
 def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True):
+    print("dims : ", feature_dim, module_dim)
     layers = []
     prev_dim = feature_dim
     model = tf.keras.Sequential()
     for i in range(num_layers):
-        model.add(tf.keras.layers.Conv2D(module_dim, kernel_size=(3, 3), padding='same', input_shape=prev_dim))
+        model.add(tf.keras.layers.Conv2D(module_dim, kernel_size=(3, 3), padding='same'))
         if with_batchnorm:
             model.add(tf.keras.layers.BatchNormalization())
         model.add(tf.keras.layers.ReLU())
@@ -47,16 +48,16 @@ def build_classifier(module_C, module_H, module_W, num_answers,
     layers = []
     prev_dim = module_C * module_H * module_W
     if proj_dim is not None and proj_dim > 0:
-        layers.append(tf.keras.layers.Conv2D(proj_dim, kernel_size=(1, 1), input_shape=module_C))
+        layers.append(tf.keras.layers.Conv2D(proj_dim, kernel_size=(1, 1)))
         if with_batchnorm:
             layers.append(tf.keras.layers.BatchNormalization())
         layers.append(tf.keras.layers.ReLU())
         prev_dim = proj_dim * module_H * module_W
     if downsample == 'maxpool2':
-        layers.append(tf.keras.layers.MaxPool2D(pool_size=(2, 2), stride=2))
+        layers.append(tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=2))
         prev_dim //= 4
     elif downsample == 'maxpool4':
-        layers.append(tf.keras.layers.MaxPool2D(pool_size=(4, 4), stride=4))
+        layers.append(tf.keras.layers.MaxPool2D(pool_size=(4, 4), strides=4))
         prev_dim //= 16
     layers.append(Flatten())
     for next_dim in fc_dims:
