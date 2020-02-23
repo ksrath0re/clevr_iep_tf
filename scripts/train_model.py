@@ -14,9 +14,6 @@ import json
 import random
 import shutil
 
-# import torch
-# torch.backends.cudnn.enabled = True
-# from torch.autograd import Variable
 import numpy as np
 import h5py
 import tensorflow as tf
@@ -229,7 +226,7 @@ def train_loop(args, train_loader, val_loader):
         print('Here is the program generator:')
         # program_generator.build(input_shape=[46,])
         # program_generator.compile(optimizer='adam', loss='mse')
-        # i print(program_generator.summary())
+        print(program_generator)
     if args.model_type == 'EE' or args.model_type == 'PG+EE':
         execution_engine, ee_kwargs = get_execution_engine(args)
         ee_optimizer = optimizers.Adam(args.learning_rate)
@@ -277,12 +274,6 @@ def train_loop(args, train_loader, val_loader):
                     batch[3]), to_tensor(
                     batch[4]), batch[5]
 
-                #print("Questions : ", questions.shape)
-                #print("Features :", feats.shape)
-                #print(" Answers : ", answers.shape)
-                #print(" prgrams : ", programs.shape)
-                print("----------------")
-
                 questions_var = tf.Variable(questions)
                 feats_var = tf.Variable(feats)
                 answers_var = tf.Variable(answers)
@@ -291,16 +282,12 @@ def train_loop(args, train_loader, val_loader):
 
                 reward = None
                 if args.model_type == 'PG':
-                    #checkpoint_dir = './training_checkpoints'
-                    #checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
-                    # checkpoint = tf.train.Checkpoint(optimizer=pg_optimizer,
-                    #                                 program_generator=program_generator)
                     # Train program generator with ground-truth programs+++
                     batch_loss = program_generator(questions_var, programs_var)
-            total_loss += batch_loss
-            variables = program_generator.variables
-            gradients = tape.gradient(batch_loss, variables)
-            pg_optimizer.apply_gradients(zip(gradients), variables)
+                    total_loss += batch_loss
+                    variables = program_generator.variables
+                    gradients = tape.gradient(batch_loss, variables)
+                    pg_optimizer.apply_gradients(zip(gradients), variables)
 
             print(
                 'Epoch {} Batch No. {} Loss {:.4f}'.format(
