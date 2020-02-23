@@ -1,6 +1,7 @@
 from iep.models.layers import ResidualBlock, GlobalAveragePool, Flatten
 import iep.programs
 import tensorflow as tf
+from collections import OrderedDict
 
 
 class ConcatBlock(tf.Module):
@@ -87,6 +88,7 @@ class ModuleNet(tf.keras.Model):
                  classifier_dropout=0,
                  verbose=True):
         super(ModuleNet, self).__init__()
+        self.modules = OrderedDict()
         print("Building stem ...")
         self.stem = build_stem(feature_dim[0], module_dim,
                                num_layers=stem_num_layers,
@@ -128,10 +130,13 @@ class ModuleNet(tf.keras.Model):
                 mod = ConcatBlock(module_dim,
                                   with_residual=module_residual,
                                   with_batchnorm=module_batchnorm)
-            self.add_module(fn_str, mod) #TODO look for the replacement
+            self.add_module(fn_str, mod)
             self.function_modules[fn_str] = mod
 
         self.save_module_outputs = False
+
+    def add_module(self, name, module):
+        self.modules[name] = module
 
     def expand_answer_vocab(self, answer_to_idx, std=0.01, init_b=-50):
         # TODO: This is really gross, dipping into private internals of Sequential
