@@ -158,16 +158,16 @@ class ModuleNet(tf.keras.Model):
         final_linear.bias.data = new_bias
 
     def _forward_modules_json(self, feats, program):
-        def gen_hook(i, j):  # CHANGE
-            def hook(grad):  # CHANGE
-                self.all_module_grad_outputs[i][j] = grad.data.cpu().clone()  # CHANGE
-
-            return hook
+        # def gen_hook(i, j):  # CHANGE
+        #     def hook(grad):  # CHANGE
+        #         self.all_module_grad_outputs[i][j] = grad.data.cpu().clone()  # CHANGE
+        #
+        #     return hook
 
         self.all_module_outputs = []
         self.all_module_grad_outputs = []
         # We can't easily handle minibatching of modules, so just do a loop
-        N = feats.size(0)
+        N = tf.shape(feats)[0]
         final_module_outputs = []
         for i in range(N):
             if self.save_module_outputs:
@@ -183,16 +183,16 @@ class ModuleNet(tf.keras.Model):
                     module_inputs = [module_outputs[j] for j in f['inputs']]
                 module_outputs.append(module(*module_inputs))
                 if self.save_module_outputs:
-                    self.all_module_outputs[-1].append(module_outputs[-1].data.cpu().clone())  # CHANGE
-                    module_outputs[-1].register_hook(gen_hook(i, j))  # CHANGE
+                    self.all_module_outputs[-1].append(module_outputs[-1].read_value().numpy())  # CHANGE
+                    #module_outputs[-1].register_hook(gen_hook(i, j))  # CHANGE
             final_module_outputs.append(module_outputs[-1])
         final_module_outputs = tf.concat(final_module_outputs, 0)
         return final_module_outputs
 
     def _forward_modules_ints_helper(self, feats, program, i, j):
         used_fn_j = True
-        if j < program.size(1):
-            fn_idx = program.data[i, j]
+        if j < tf.shape(program)[1]:
+            fn_idx = program.read_value()[i, j]
             fn_str = self.vocab['program_idx_to_token'][fn_idx]
         else:
             used_fn_j = False
@@ -224,9 +224,9 @@ class ModuleNet(tf.keras.Model):
         program: LongTensor of shape (N, L) giving a prefix-encoded program for
           each image.
         """
-        N = feats.size(0)
+        N = tf.shape(feats)[0]
         final_module_outputs = []
-        self.used_fns = tf.Tensor(program.size()).fill_(0)
+        self.used_fns = tf.fill(tf.shape(program), 0)
         for i in range(N):
             cur_output, _ = self._forward_modules_ints_helper(feats, program, i, 0)
             final_module_outputs.append(cur_output)
@@ -234,8 +234,8 @@ class ModuleNet(tf.keras.Model):
         final_module_outputs = tf.concat(final_module_outputs, 0)
         return final_module_outputs
 
-    def forward(self, x, program):
-        N = x.size(0)
+    def __call__(self, x, program):
+        N = tf.shape(x)[0]
         assert N == len(program)
 
         feats = self.stem(x)

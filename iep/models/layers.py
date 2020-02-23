@@ -40,4 +40,4 @@ class GlobalAveragePool(tf.keras.Model):
 
 class Flatten(tf.keras.Model):
     def __call__(self, x):
-        return tf.reshape(x, [x.size(0), -1])
+        return tf.reshape(x, [tf.shape(x)[0], -1])
