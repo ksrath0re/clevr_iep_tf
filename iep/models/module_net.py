@@ -12,20 +12,20 @@ class ConcatBlock(tf.keras.Model):
                                        with_batchnorm=with_batchnorm)
 
     def __call__(self, x, y):
-        print("Shape of x and y ", x.shape, y.shape)
+        #print("Shape of x and y ", x.shape, y.shape)
         #x = tf.transpose(x, perm=[0, 2, 3, 1])
         #y = tf.transpose(y, perm=[0, 2, 3, 1])
         #print("Shape of x and y changed", x.shape, y.shape)
         out = tf.concat([x, y], 1)  # Concatentate along depth
-        print("Shape of out changed before", out.shape)
+        #print("Shape of out changed before", out.shape)
         out = tf.transpose(out, perm=[0, 2, 3, 1])
         out = self.proj(out)
-        print("Shape of out after proj", out.shape)
+        #print("Shape of out after proj", out.shape)
         out = tf.nn.relu(out)
-        print("Shape of out after relu", out.shape)
+        #print("Shape of out after relu", out.shape)
         out = tf.transpose(out, perm=[0, 3, 1, 2])
         out = self.res_block(out)
-        print("Shape of out changed", out.shape)
+        #print("Shape of out changed", out.shape)
         return out
 
 
@@ -59,29 +59,30 @@ def build_classifier(module_C, module_H, module_W, num_answers,
                      with_batchnorm=True, dropout=0):
     layers = []
     prev_dim = module_C * module_H * module_W
+    model = tf.keras.Sequential()
     if proj_dim is not None and proj_dim > 0:
-        layers.append(tf.keras.layers.Conv2D(proj_dim, kernel_size=(1, 1)))
+        model.add(tf.keras.layers.Conv2D(proj_dim, kernel_size=(1, 1)))
         if with_batchnorm:
-            layers.append(tf.keras.layers.BatchNormalization())
-        layers.append(tf.keras.layers.ReLU())
+            model.add(tf.keras.layers.BatchNormalization())
+        model.add(tf.keras.layers.ReLU())
         prev_dim = proj_dim * module_H * module_W
     if downsample == 'maxpool2':
-        layers.append(tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=2))
+        model.add(tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=2))
         prev_dim //= 4
     elif downsample == 'maxpool4':
-        layers.append(tf.keras.layers.MaxPool2D(pool_size=(4, 4), strides=4))
+        model.add(tf.keras.layers.MaxPool2D(pool_size=(4, 4), strides=4))
         prev_dim //= 16
-    layers.append(Flatten())
+    model.add(Flatten())
     for next_dim in fc_dims:
-        layers.append(tf.keras.layers.Dense(next_dim, input_shape=(prev_dim, )))
+        model.add(tf.keras.layers.Dense(next_dim, input_shape=(prev_dim, )))
         if with_batchnorm:
-            layers.append(tf.keras.layers.BatchNormalization())
+           model.add(tf.keras.layers.BatchNormalization())
         layers.append(tf.keras.layers.ReLU())
         if dropout > 0:
-            layers.append(tf.keras.layers.Dropout(dropout))
+            model.add(tf.keras.layers.Dropout(dropout))
         prev_dim = next_dim
-    layers.append(tf.keras.layers.Dense(num_answers, input_shape=(prev_dim, )))
-    model = tf.keras.Sequential(layers=layers)
+    model.add(tf.keras.layers.Dense(num_answers, input_shape=(prev_dim, )))
+    #model = tf.keras.Sequential(layers=layers)
     return model
 
 
@@ -232,8 +233,8 @@ class ModuleNet(tf.keras.Model):
                 cur_input, j = self._forward_modules_ints_helper(feats, program, i, j)
                 module_inputs.append(cur_input)
         #for i, item in enumerate(module_inputs):
-        #     if True or item.shape != (1, 128, 14, 14):
-        #         print("Shape of input #",i," : ", item.shape)
+             #if True or item.shape != (1, 128, 14, 14):
+             #    print("Shape of input #",i," : ", item.shape)
         module_output = module(*module_inputs)
         return module_output, j
 
@@ -279,5 +280,8 @@ class ModuleNet(tf.keras.Model):
 
         # After running modules for each input, concatenat the outputs from the
         # final module and run the classifier.
+        print("shape of final_module_outputs :", final_module_outputs.shape)
+        final_module_outputs = tf.transpose(final_module_outputs, perm=[0, 2, 3, 1])
+        print("shape of final_module_outputs after transpose :", final_module_outputs.shape)
         out = self.classifier(final_module_outputs)
         return out

@@ -177,7 +177,7 @@ def batch_creater(data, batch_size, drop_last):
     j = 0
     big_batch = []
     print("Length of data set : ", len(data))
-    trimmed_data = len(data)/6000
+    trimmed_data = len(data)/60
     print("trimmed length : ", int(trimmed_data))
     # print("Batch Size : ", batch_size)
     for i in range(int(trimmed_data)):
