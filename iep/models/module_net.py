@@ -4,22 +4,33 @@ import tensorflow as tf
 from collections import OrderedDict
 
 
-class ConcatBlock(tf.Module):
+class ConcatBlock(tf.keras.Model):
     def __init__(self, dim, with_residual=True, with_batchnorm=True):
         super(ConcatBlock, self).__init__()
-        self.proj = tf.keras.layers.Conv2D(dim, kernel_size=(1, 1), padding=0)
+        self.proj = tf.keras.layers.Conv2D(dim, kernel_size=(1, 1), padding='same')
         self.res_block = ResidualBlock(dim, with_residual=with_residual,
                                        with_batchnorm=with_batchnorm)
 
     def __call__(self, x, y):
+        print("Shape of x and y ", x.shape, y.shape)
+        #x = tf.transpose(x, perm=[0, 2, 3, 1])
+        #y = tf.transpose(y, perm=[0, 2, 3, 1])
+        #print("Shape of x and y changed", x.shape, y.shape)
         out = tf.concat([x, y], 1)  # Concatentate along depth
-        out = tf.nn.relu(self.proj(out))
+        print("Shape of out changed before", out.shape)
+        out = tf.transpose(out, perm=[0, 2, 3, 1])
+        out = self.proj(out)
+        print("Shape of out after proj", out.shape)
+        out = tf.nn.relu(out)
+        print("Shape of out after relu", out.shape)
+        out = tf.transpose(out, perm=[0, 3, 1, 2])
         out = self.res_block(out)
+        print("Shape of out changed", out.shape)
         return out
 
 
 def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True):
-    print("dims : ", feature_dim, module_dim)
+    #print("dims : ", feature_dim, module_dim)
     layers = []
     prev_dim = feature_dim
     model = tf.keras.Sequential()
@@ -190,9 +201,11 @@ class ModuleNet(tf.keras.Model):
         return final_module_outputs
 
     def _forward_modules_ints_helper(self, feats, program, i, j):
+        #print("fwd me feats ka shape : ", feats.shape)
+        #print("prgm ki shape ", program.shape)
         used_fn_j = True
         if j < tf.shape(program)[1]:
-            fn_idx = program.read_value()[i, j]
+            fn_idx = program.read_value().numpy()[i, j]
             fn_str = self.vocab['program_idx_to_token'][fn_idx]
         else:
             used_fn_j = False
@@ -208,14 +221,20 @@ class ModuleNet(tf.keras.Model):
         j += 1
         module = self.function_modules[fn_str]
         if fn_str == 'scene':
+            #feats = tf.transpose(feats, perm=[0,2,3,1])
             module_inputs = [feats[i:i + 1]]
+            #feats = tf.transpose(feats, perm=[0,3,1,2])
+            #print("dekhte hai ", module_inputs[0].shape)
         else:
             num_inputs = self.function_modules_num_inputs[fn_str]
             module_inputs = []
             while len(module_inputs) < num_inputs:
                 cur_input, j = self._forward_modules_ints_helper(feats, program, i, j)
                 module_inputs.append(cur_input)
-        module_output = module(module_inputs)
+        #for i, item in enumerate(module_inputs):
+        #     if True or item.shape != (1, 128, 14, 14):
+        #         print("Shape of input #",i," : ", item.shape)
+        module_output = module(*module_inputs)
         return module_output, j
 
     def _forward_modules_ints(self, feats, program):
@@ -227,22 +246,33 @@ class ModuleNet(tf.keras.Model):
         N = tf.shape(feats)[0]
         final_module_outputs = []
         self.used_fns = tf.fill(tf.shape(program), 0)
+        self.used_fns = self.used_fns.numpy()
         for i in range(N):
             cur_output, _ = self._forward_modules_ints_helper(feats, program, i, 0)
+            #print("curr output shape : ", cur_output.shape)
             final_module_outputs.append(cur_output)
-        self.used_fns = self.used_fns.type_as(program.data).float()
+        self.used_fns = tf.convert_to_tensor(self.used_fns, dtype=tf.float32)
+        #self.used_fns = self.used_fns.type_as(program.data).float()
+        #print("lenght of final_module_outputs : ", len(final_module_outputs))
+        #print("shape of final_module_outputs 0, 1, last: ", final_module_outputs[0].shape, final_module_outputs[1].shape, final_module_outputs[-1].shape)
         final_module_outputs = tf.concat(final_module_outputs, 0)
+        #print("shape of final_module_outputs : ", final_module_outputs.shape)
         return final_module_outputs
 
     def __call__(self, x, program):
         N = tf.shape(x)[0]
-        assert N == len(program)
+        #assert N == len(program)
 
         feats = self.stem(x)
+        #print("shape of feats :", feats.shape)
+        feats = tf.transpose(feats, perm=[0, 3, 1, 2])
+        #print("shape of feats :", feats.shape)
+        #print(type(program), "is program type")
+        #print("rank of program is : ", tf.rank(program))
 
         if type(program) is list or type(program) is tuple:
             final_module_outputs = self._forward_modules_json(feats, program)
-        elif type(program) is tf.Variable and program.dim() == 2:
+        elif tf.rank(program) == 2:
             final_module_outputs = self._forward_modules_ints(feats, program)
         else:
             raise ValueError('Unrecognized program format')

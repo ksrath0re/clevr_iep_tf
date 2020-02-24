@@ -177,10 +177,10 @@ def batch_creater(data, batch_size, drop_last):
     j = 0
     big_batch = []
     print("Length of data set : ", len(data))
-    #trimmed_data = len(data)/60
-    #print("trimmed length : ", int(trimmed_data))
+    trimmed_data = len(data)/6000
+    print("trimmed length : ", int(trimmed_data))
     # print("Batch Size : ", batch_size)
-    for i in range(len(data)):
+    for i in range(int(trimmed_data)):
         for k in range(6):
             batch[k].append(data[i][k])
         if len(batch[0]) == batch_size:
@@ -296,6 +296,9 @@ def train_loop(args, train_loader, val_loader):
                 if args.model_type == 'EE':
                     # Train program generator with ground-truth programs+++
                     print("Training program generator with ground-truth programs ... ")
+                    print("shape of features before train : ", feats_var.shape)
+                    feats_var = tf.transpose(feats_var, perm=[0, 2, 3, 1])
+                    print("shape of reshaped features before train : ", feats_var.shape)
                     scores = execution_engine(feats_var, programs_var)
                     batch_loss = loss_function(scores, answers_var)
                     total_loss += batch_loss
