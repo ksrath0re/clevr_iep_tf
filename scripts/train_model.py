@@ -298,57 +298,36 @@ def train_loop(args, train_loader, val_loader):
                     #TODO Might need some changes for gradients
 
                     ee_optimizer.apply_gradients(zip(gradients, execution_engine.trainable_variables))
+
+            elif args.model_type == 'PG+EE':
+                programs_pred = program_generator.reinforce_sample(questions_var)
+                scores = execution_engine(feats_var, programs_pred)
+
+                loss = tf.nn.softmax_cross_entropy_with_logits(scores, answers_var)
+                _, preds = scores.data.max(1)
+                # raw_reward = (preds == answers).float()
+                raw_reward = tf.cast((preds == answers), dtype=tf.float32)
+                reward_moving_average *= args.reward_decay
+                reward_moving_average += (1.0 - args.reward_decay) * raw_reward.mean()
+                centered_reward = raw_reward - reward_moving_average
+
+                if args.train_execution_engine == 1:
+                    ee_optimizer.zero_grad()
+                    loss.backward()
+                    ee_optimizer.step()
+
+                if args.train_program_generator == 1:
+                    pg_optimizer.zero_grad()
+                    program_generator.reinforce_backward(centered_reward.cuda())
+                    pg_optimizer.step()
             print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
         if epoch % 2 == 0:
             checkpoint.save(file_prefix=checkpoint_prefix)
         if t == args.num_iterations:
             break
-            # program_generator.compile(optimizer=pg_optimizer, loss=loss)
-            # ques = np.asarray(questions_var.read_value())
-            # prog = np.asarray(programs_var.read_value())
-            # history = program_generator.fit(
-            #     x=ques,
-            #     y=prog,
-            #     batch_size=args.batch_size,
-            #     epochs=10,
-            #     verbose=0,
-            #     callbacks=[LossAndErrorPrintingCallback(), checkpoint])
 
-            # elif args.model_type == 'EE':
-            #     # Train execution engine with ground-truth programs
-            #     scores = execution_engine(feats_var, programs_var)
-            #     loss = tf.nn.softmax_cross_entropy_with_logits(
-            #         scores, answers_var)
-            #     execution_engine.compile(optimizer=ee_optimizer, loss=loss)
-            #     history = execution_engine.fit(
-            #         questions_var,
-            #         to_categorical(answers_var),
-            #         batch_size=args.batch_size,
-            #         epochs=10,
-            #         verbose=0,
-            #         callbacks=[LossAndErrorPrintingCallback(), checkpoint])
 
-            # elif args.model_type == 'PG+EE':
-            #     programs_pred = program_generator.reinforce_sample(questions_var)
-            #     scores = execution_engine(feats_var, programs_pred)
-            #
-            #     loss = tf.nn.softmax_cross_entropy_with_logits(scores, answers_var)
-            #     _, preds = scores.data.max(1)
-            #     # raw_reward = (preds == answers).float()
-            #     raw_reward = tf.cast((preds == answers), dtype=tf.float32)
-            #     reward_moving_average *= args.reward_decay
-            #     reward_moving_average += (1.0 - args.reward_decay) * raw_reward.mean()
-            #     centered_reward = raw_reward - reward_moving_average
-            #
-            #     if args.train_execution_engine == 1:
-            #         ee_optimizer.zero_grad()
-            #         loss.backward()
-            #         ee_optimizer.step()
-            #
-            #     if args.train_program_generator == 1:
-            #         pg_optimizer.zero_grad()
-            #         program_generator.reinforce_backward(centered_reward.cuda())
-            #         pg_optimizer.step()
+
 
             # if t % args.record_loss_every == 0:
             #     print(t, loss.data[0])
