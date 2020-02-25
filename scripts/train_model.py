@@ -179,7 +179,6 @@ def batch_creater(data, batch_size, drop_last):
     print("Length of data set : ", len(data))
     trimmed_data = len(data)/60
     print("trimmed length : ", int(trimmed_data))
-    # print("Batch Size : ", batch_size)
     for i in range(int(trimmed_data)):
         for k in range(6):
             batch[k].append(data[i][k])
@@ -251,23 +250,15 @@ def train_loop(args, train_loader, val_loader):
     # set_mode('train', [program_generator, execution_engine, baseline_model])
 
     print('train_loader has %d samples' % len(train_loader))
-    # train_loader = train_loader[:256]
-    print('train_loader has %d samples' % len(train_loader))
     print('val_loader has %d samples' % len(val_loader))
-    # data_sampler = iter(range(len(train_loader)))
     data_load = batch_creater(train_loader, batch_size, False)
     print("Data load length :", len(data_load))
-    # print(data_load[0][0])
 
     while t < args.num_iterations:
         total_loss = 0
         epoch += 1
         print('Starting epoch %d' % epoch)
         print("value of t :", t)
-        # train_loader_data = get_data(train_loader)
-        # print("train data loader length :", len(train_loader_data))
-        # print(train_loader[0].shape)
-        # print(train_loader[0])
         for run_num, batch in enumerate(data_load):
             batch_loss = 0
             t += 1
@@ -295,48 +286,19 @@ def train_loop(args, train_loader, val_loader):
 
             if args.model_type == 'EE':
                 # Train program generator with ground-truth programs+++
-                #print("Training program generator with ground-truth programs ... ")
-                #print("shape of features before train : ", feats_var.shape)
                 feats = tf.transpose(feats_var, perm=[0, 2, 3, 1])
-                #feats_var.assign(feats)
                 feats_var = tf.Variable(feats)
-                #print("shape of reshaped features before train : ", feats_var.shape)
-                #print("type of feats_var: ", type(feats_var,)," and of program_var :", type(programs_var))
                 with tf.GradientTape() as tape:
                     scores = execution_engine(feats_var, programs_var)
-                    #tape.watch(scores)
-                    #scores = tf.dtypes.cast(scores, dtype=tf.float32)
                     answers_var = tf.dtypes.cast(answers_var, dtype=tf.int32)
-                    #tape.watch(answers_var)
-                #answers_var = answers_var.read_value()
-                #print("Shape of score var and ans_var : ", scores.shape, answers_var.shape)
-                #print("type of score and ans_var : ", type(scores), type(answers_var))
-                    #scores = tf.Variable(scores)
-                    #answers_var = tf.Variable(answers_var)
-                #with tf.GradientTape() as tape2:
-                #batch_loss = loss_function(scores, answers_var)
                     batch_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=scores, labels=answers_var))
-                    #tape.watch(batch_loss)
                     total_loss += batch_loss
-                    #variables = execution_engine.trainable_variables
-                    #print("length of variables : ", len(variables))
-                #variables = execution_engine.trainable_variables
-                #batch_loss = tf.Variable(batch_loss)
                     grads = tape.gradient(batch_loss, execution_engine.trainable_variables)
                     gradients = [grad if grad is not None else tf.zeros_like(var) for var, grad in zip(execution_engine.trainable_variables, grads)]
-                    #TODO Might need some changes
-                    #print("length of gradients : ", len(gradients))
-                    #for i, item in enumerate(gradients):
-                    #    print("gradients #",i," : ", item)
-                    #    if i == 5:
-                    #        break
-                    #print("loss : ", batch_loss)
-                #print("variables : ", variables)
-                #print("gradient :", gradients)
+                    #TODO Might need some changes for gradients
+
                     ee_optimizer.apply_gradients(zip(gradients, execution_engine.trainable_variables))
-            print(
-                'Epoch {} Batch No. {} Loss {:.4f}'.format(
-                    epoch, run_num, batch_loss.numpy()))
+            print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
         if epoch % 2 == 0:
             checkpoint.save(file_prefix=checkpoint_prefix)
         if t == args.num_iterations:
