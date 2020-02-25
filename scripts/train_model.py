@@ -27,7 +27,7 @@ from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.callbacks import EarlyStopping, Callback, ModelCheckpoint
 
 parser = argparse.ArgumentParser()
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # Input data
 parser.add_argument('--train_question_h5', default='data/train_questions.h5')
 parser.add_argument('--train_features_h5', default='data/train_features.h5')
@@ -279,10 +279,10 @@ def train_loop(args, train_loader, val_loader):
                     batch[4]), batch[5]
 
                 questions_var = tf.Variable(questions)
-                feats_var = tf.Variable(feats)
-                answers_var = tf.Variable(answers)
+                feats_var = tf.Variable(feats, trainable=True)
+                answers_var = tf.Variable(answers, trainable=True)
                 if programs[0] is not None:
-                    programs_var = tf.Variable(programs)
+                    programs_var = tf.Variable(programs, trainable=True)
 
                 reward = None
                 if args.model_type == 'PG':
@@ -297,14 +297,30 @@ def train_loop(args, train_loader, val_loader):
                     # Train program generator with ground-truth programs+++
                     print("Training program generator with ground-truth programs ... ")
                     print("shape of features before train : ", feats_var.shape)
-                    feats_var = tf.transpose(feats_var, perm=[0, 2, 3, 1])
+                    feats = tf.transpose(feats_var, perm=[0, 2, 3, 1])
+                    #feats_var.assign(feats)
+                    feats_var = tf.Variable(feats)
                     print("shape of reshaped features before train : ", feats_var.shape)
+                    print("type of feats_var: ", type(feats_var,)," and of program_var :", type(programs_var))
                     scores = execution_engine(feats_var, programs_var)
-                    batch_loss = loss_function(scores, answers_var)
+                    scores = tf.dtypes.cast(scores, dtype=tf.float32)
+                    answers_var = tf.dtypes.cast(answers_var, dtype=tf.int32)
+                    #answers_var = answers_var.read_value()
+                    print("Shape of score var and ans_var : ", scores.shape, answers_var.shape)
+                    print("type of score and ans_var : ", type(scores), type(answers_var))
+                    scores = tf.Variable(scores)
+                    answers_var = tf.Variable(answers_var)
+                    #with tf.GradientTape() as tape2:
+                    #batch_loss = loss_function(scores, answers_var)
+                    batch_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=scores, labels=answers_var))
                     total_loss += batch_loss
                     variables = execution_engine.variables
+                    #variables = execution_engine.trainable_variables
                     gradients = tape.gradient(batch_loss, variables)
-                    ee_optimizer.apply_gradients(zip(gradients), variables)
+                    print("loss : ", batch_loss)
+                    #print("variables : ", variables)
+                    #print("gradient :", gradients)
+                    ee_optimizer.apply_gradients(zip(gradients, variables))
             print(
                 'Epoch {} Batch No. {} Loss {:.4f}'.format(
                     epoch, run_num, batch_loss.numpy()))

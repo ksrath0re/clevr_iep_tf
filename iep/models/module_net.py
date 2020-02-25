@@ -57,32 +57,32 @@ def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True):
 def build_classifier(module_C, module_H, module_W, num_answers,
                      fc_dims=[], proj_dim=None, downsample='maxpool2',
                      with_batchnorm=True, dropout=0):
-    layers = []
+    l = []
     prev_dim = module_C * module_H * module_W
-    model = tf.keras.Sequential()
     if proj_dim is not None and proj_dim > 0:
-        model.add(tf.keras.layers.Conv2D(proj_dim, kernel_size=(1, 1)))
+        l.append(tf.keras.layers.Conv2D(proj_dim, kernel_size=(1, 1), input_shape=[14, 14, 128], padding='same', batch_size=64))
         if with_batchnorm:
-            model.add(tf.keras.layers.BatchNormalization())
-        model.add(tf.keras.layers.ReLU())
+            l.append(tf.keras.layers.BatchNormalization())
+        l.append(tf.keras.layers.ReLU())
         prev_dim = proj_dim * module_H * module_W
     if downsample == 'maxpool2':
-        model.add(tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=2))
+        l.append(tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=2))
         prev_dim //= 4
     elif downsample == 'maxpool4':
-        model.add(tf.keras.layers.MaxPool2D(pool_size=(4, 4), strides=4))
+        l.append(tf.keras.layers.MaxPool2D(pool_size=(4, 4), strides=4))
         prev_dim //= 16
-    model.add(Flatten())
+    l.append(Flatten())
     for next_dim in fc_dims:
-        model.add(tf.keras.layers.Dense(next_dim, input_shape=(prev_dim, )))
+        print("next_dim :", next_dim, type(next_dim))
+        l.append(tf.keras.layers.Dense(next_dim, input_shape=(prev_dim,)))
         if with_batchnorm:
-           model.add(tf.keras.layers.BatchNormalization())
-        layers.append(tf.keras.layers.ReLU())
+            l.append(tf.keras.layers.BatchNormalization())
+        l.append(tf.keras.layers.ReLU())
         if dropout > 0:
-            model.add(tf.keras.layers.Dropout(dropout))
+            l.append(tf.keras.layers.Dropout(dropout))
         prev_dim = next_dim
-    model.add(tf.keras.layers.Dense(num_answers, input_shape=(prev_dim, )))
-    #model = tf.keras.Sequential(layers=layers)
+    l.append(tf.keras.layers.Dense(num_answers, input_shape=(prev_dim,)))
+    model = tf.keras.Sequential(layers=l)
     return model
 
 
@@ -122,7 +122,7 @@ class ModuleNet(tf.keras.Model):
 
         if verbose:
             print('Here is my classifier:')
-            print(self.classifier)
+            #print(self.classifier.summary())
         self.stem_times = []
         self.module_times = []
         self.classifier_times = []
@@ -205,6 +205,8 @@ class ModuleNet(tf.keras.Model):
         #print("fwd me feats ka shape : ", feats.shape)
         #print("prgm ki shape ", program.shape)
         used_fn_j = True
+        #print("type of feats_var: ", type(feats))
+        #print("type of program_var: ", type(program))
         if j < tf.shape(program)[1]:
             fn_idx = program.read_value().numpy()[i, j]
             fn_str = self.vocab['program_idx_to_token'][fn_idx]
@@ -262,15 +264,16 @@ class ModuleNet(tf.keras.Model):
 
     def __call__(self, x, program):
         N = tf.shape(x)[0]
+        print("type of x after stem: ", type(x))
         #assert N == len(program)
-
         feats = self.stem(x)
+        print("type of feats_var after stem: ", type(feats))
         #print("shape of feats :", feats.shape)
         feats = tf.transpose(feats, perm=[0, 3, 1, 2])
         #print("shape of feats :", feats.shape)
         #print(type(program), "is program type")
         #print("rank of program is : ", tf.rank(program))
-
+        print("type of feats_var after transpose: ", type(feats))
         if type(program) is list or type(program) is tuple:
             final_module_outputs = self._forward_modules_json(feats, program)
         elif tf.rank(program) == 2:
@@ -283,5 +286,9 @@ class ModuleNet(tf.keras.Model):
         print("shape of final_module_outputs :", final_module_outputs.shape)
         final_module_outputs = tf.transpose(final_module_outputs, perm=[0, 2, 3, 1])
         print("shape of final_module_outputs after transpose :", final_module_outputs.shape)
+        #print("type  :", type(final_module_outputs))
+        final_module_outputs = tf.Variable(final_module_outputs)
+        print("type  :", type(final_module_outputs))
         out = self.classifier(final_module_outputs)
+        print("shape of out after modulenet: ", out.shape)
         return out

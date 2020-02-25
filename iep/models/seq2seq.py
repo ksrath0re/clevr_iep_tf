@@ -291,7 +291,7 @@ class Seq2Seq(tf.keras.Model):
 
     def __call__(self, x, y):
         encoded = self.encoder(x)
-        #print("Encoded ka shape : ", encoded.shape)
+        print("Encoded ka type : ", type(encoded))
         output_logprobs, _, _ = self.decoder(encoded, y)
         #print("output logprobs ka shape :", output_logprobs.shape)
         loss = self.compute_loss(output_logprobs, y)
