@@ -295,33 +295,45 @@ def train_loop(args, train_loader, val_loader):
 
             if args.model_type == 'EE':
                 # Train program generator with ground-truth programs+++
-                print("Training program generator with ground-truth programs ... ")
-                print("shape of features before train : ", feats_var.shape)
+                #print("Training program generator with ground-truth programs ... ")
+                #print("shape of features before train : ", feats_var.shape)
                 feats = tf.transpose(feats_var, perm=[0, 2, 3, 1])
                 #feats_var.assign(feats)
                 feats_var = tf.Variable(feats)
-                print("shape of reshaped features before train : ", feats_var.shape)
-                print("type of feats_var: ", type(feats_var,)," and of program_var :", type(programs_var))
-                scores = execution_engine(feats_var, programs_var)
-                scores = tf.dtypes.cast(scores, dtype=tf.float32)
-                answers_var = tf.dtypes.cast(answers_var, dtype=tf.int32)
+                #print("shape of reshaped features before train : ", feats_var.shape)
+                #print("type of feats_var: ", type(feats_var,)," and of program_var :", type(programs_var))
+                with tf.GradientTape() as tape:
+                    scores = execution_engine(feats_var, programs_var)
+                    #tape.watch(scores)
+                    #scores = tf.dtypes.cast(scores, dtype=tf.float32)
+                    answers_var = tf.dtypes.cast(answers_var, dtype=tf.int32)
+                    #tape.watch(answers_var)
                 #answers_var = answers_var.read_value()
-                print("Shape of score var and ans_var : ", scores.shape, answers_var.shape)
-                print("type of score and ans_var : ", type(scores), type(answers_var))
-                scores = tf.Variable(scores)
-                answers_var = tf.Variable(answers_var)
+                #print("Shape of score var and ans_var : ", scores.shape, answers_var.shape)
+                #print("type of score and ans_var : ", type(scores), type(answers_var))
+                    #scores = tf.Variable(scores)
+                    #answers_var = tf.Variable(answers_var)
                 #with tf.GradientTape() as tape2:
                 #batch_loss = loss_function(scores, answers_var)
-                with tf.GradientTape() as tape:
                     batch_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=scores, labels=answers_var))
-                total_loss += batch_loss
-                variables = execution_engine.variables
+                    #tape.watch(batch_loss)
+                    total_loss += batch_loss
+                    #variables = execution_engine.trainable_variables
+                    #print("length of variables : ", len(variables))
                 #variables = execution_engine.trainable_variables
-                gradients = tape.gradient(batch_loss, variables)
-                print("loss : ", batch_loss)
+                #batch_loss = tf.Variable(batch_loss)
+                    grads = tape.gradient(batch_loss, execution_engine.trainable_variables)
+                    gradients = [grad if grad is not None else tf.zeros_like(var) for var, grad in zip(execution_engine.trainable_variables, grads)]
+                    #TODO Might need some changes
+                    #print("length of gradients : ", len(gradients))
+                    #for i, item in enumerate(gradients):
+                    #    print("gradients #",i," : ", item)
+                    #    if i == 5:
+                    #        break
+                    #print("loss : ", batch_loss)
                 #print("variables : ", variables)
                 #print("gradient :", gradients)
-                ee_optimizer.apply_gradients(zip(gradients, variables))
+                    ee_optimizer.apply_gradients(zip(gradients, execution_engine.trainable_variables))
             print(
                 'Epoch {} Batch No. {} Loss {:.4f}'.format(
                     epoch, run_num, batch_loss.numpy()))

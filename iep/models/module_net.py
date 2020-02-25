@@ -73,7 +73,7 @@ def build_classifier(module_C, module_H, module_W, num_answers,
         prev_dim //= 16
     l.append(Flatten())
     for next_dim in fc_dims:
-        print("next_dim :", next_dim, type(next_dim))
+        #print("next_dim :", next_dim, type(next_dim))
         l.append(tf.keras.layers.Dense(next_dim, input_shape=(prev_dim,)))
         if with_batchnorm:
             l.append(tf.keras.layers.BatchNormalization())
@@ -264,16 +264,16 @@ class ModuleNet(tf.keras.Model):
 
     def __call__(self, x, program):
         N = tf.shape(x)[0]
-        print("type of x after stem: ", type(x))
+        #print("type of x after stem: ", type(x))
         #assert N == len(program)
         feats = self.stem(x)
-        print("type of feats_var after stem: ", type(feats))
+        #print("type of feats_var after stem: ", type(feats))
         #print("shape of feats :", feats.shape)
         feats = tf.transpose(feats, perm=[0, 3, 1, 2])
         #print("shape of feats :", feats.shape)
         #print(type(program), "is program type")
         #print("rank of program is : ", tf.rank(program))
-        print("type of feats_var after transpose: ", type(feats))
+        #print("type of feats_var after transpose: ", type(feats))
         if type(program) is list or type(program) is tuple:
             final_module_outputs = self._forward_modules_json(feats, program)
         elif tf.rank(program) == 2:
@@ -283,12 +283,12 @@ class ModuleNet(tf.keras.Model):
 
         # After running modules for each input, concatenat the outputs from the
         # final module and run the classifier.
-        print("shape of final_module_outputs :", final_module_outputs.shape)
+        #print("shape of final_module_outputs :", final_module_outputs.shape)
         final_module_outputs = tf.transpose(final_module_outputs, perm=[0, 2, 3, 1])
-        print("shape of final_module_outputs after transpose :", final_module_outputs.shape)
+        #print("shape of final_module_outputs after transpose :", final_module_outputs.shape)
         #print("type  :", type(final_module_outputs))
         final_module_outputs = tf.Variable(final_module_outputs)
-        print("type  :", type(final_module_outputs))
+        #print("type  :", type(final_module_outputs))
         out = self.classifier(final_module_outputs)
-        print("shape of out after modulenet: ", out.shape)
+        #print("shape of out after modulenet: ", out.shape)
         return out
