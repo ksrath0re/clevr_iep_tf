@@ -292,41 +292,44 @@ def train_loop(args, train_loader, val_loader):
                     scores = execution_engine(feats_var, programs_var)
                     answers_var = tf.dtypes.cast(answers_var, dtype=tf.int32)
                     batch_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=scores, labels=answers_var))
-                    total_loss += batch_loss
-                    grads = tape.gradient(batch_loss, execution_engine.trainable_variables)
-                    gradients = [grad if grad is not None else tf.zeros_like(var) for var, grad in zip(execution_engine.trainable_variables, grads)]
-                    #TODO Might need some changes for gradients
+                total_loss += batch_loss
+                grads = tape.gradient(batch_loss, execution_engine.trainable_variables)
+                gradients = [grad if grad is not None else tf.zeros_like(var) for var, grad in zip(execution_engine.trainable_variables, grads)]
+                #TODO Might need some changes for gradients
 
-                    ee_optimizer.apply_gradients(zip(gradients, execution_engine.trainable_variables))
+                ee_optimizer.apply_gradients(zip(gradients, execution_engine.trainable_variables))
 
             elif args.model_type == 'PG+EE':
                 print("in PG EE -----------------")
                 feats = tf.transpose(feats_var, perm=[0, 2, 3, 1])
                 feats_var = tf.Variable(feats)
-                programs_pred = program_generator.reinforce_sample(questions_var)
-                print("shape of programs_pred : ", programs_pred.shape)
-                scores = execution_engine(feats_var, programs_pred)
-                answers_var = tf.dtypes.cast(answers_var, dtype=tf.int32)
-                batch_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=scores, labels=answers_var))
-                #_, preds = scores.data.max(1)
-                print("dim of score :", scores.shape)
-                preds = tf.math.reduce_max(scores, axis=1, keepdims=True)
-                print("dim of pred :", preds.shape)
-                # raw_reward = (preds == answers).float()
-                raw_reward = tf.cast((preds == answers), dtype=tf.float32)
-                reward_moving_average *= args.reward_decay
-                reward_moving_average += (1.0 - args.reward_decay) * raw_reward.numpy().mean()
-                centered_reward = raw_reward - reward_moving_average
+                with tf.GradientTape() as pg_tape, tf.GradientTape() as ee_tape:
+                    programs_pred = program_generator.reinforce_sample(questions_var)
+                    print("shape of programs_pred : ", programs_pred.shape)
+                    scores = execution_engine(feats_var, programs_pred)
+                    answers_var = tf.dtypes.cast(answers_var, dtype=tf.int32)
+                    batch_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=scores, labels=answers_var))
+                    #_, preds = scores.data.max(1)
+                    print("dim of score :", scores.shape)
+                    preds = tf.math.reduce_max(scores, axis=1, keepdims=True)
+                    print("dim of pred :", preds.shape)
+                    # raw_reward = (preds == answers).float()
+                    raw_reward = tf.cast((preds == answers), dtype=tf.float32)
+                    reward_moving_average *= args.reward_decay
+                    reward_moving_average += (1.0 - args.reward_decay) * raw_reward.numpy().mean()
+                    centered_reward = raw_reward - reward_moving_average
 
                 if args.train_execution_engine == 1:
-                    ee_optimizer.zero_grad()
-                    loss.backward()
-                    ee_optimizer.step()
+                    grads = ee_tape.gradient(batch_loss, execution_engine.trainable_variables)
+                    gradients = [grad if grad is not None else tf.zeros_like(var) for var, grad in
+                                 zip(execution_engine.trainable_variables, grads)]
+                    # TODO Might need some changes for gradients
+
+                    ee_optimizer.apply_gradients(zip(gradients, execution_engine.trainable_variables))
 
                 if args.train_program_generator == 1:
-                    pg_optimizer.zero_grad()
-                    program_generator.reinforce_backward(centered_reward.cuda())
-                    pg_optimizer.step()
+                    program_generator.reinforce_backward(centered_reward)
+
             print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
         if epoch % 2 == 0:
             checkpoint.save(file_prefix=checkpoint_prefix)

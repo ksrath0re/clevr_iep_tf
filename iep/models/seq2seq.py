@@ -315,23 +315,24 @@ class Seq2Seq(tf.keras.Model):
     """
         assert self.multinomial_outputs is not None, 'Must call reinforce_sample first'
         grad_output = []
+        print("in reinforce backward --- ")
+        # def gen_hook(mask):
+        #     def hook(grad):
+        #         return grad * mask.contiguous().view(-1, 1).expand_as(grad)
+        #
+        #     return hook
 
-        def gen_hook(mask):
-            def hook(grad):
-                return grad * mask.contiguous().view(-1, 1).expand_as(grad)
-
-            return hook
-
-        if output_mask is not None:
-            for t, probs in enumerate(self.multinomial_probs):
-                mask = tf.Variable(output_mask[:, t])
-                probs.register_hook(gen_hook(mask))
+        # if output_mask is not None:
+        #     for t, probs in enumerate(self.multinomial_probs):
+        #         mask = tf.Variable(output_mask[:, t])
+        #         probs.register_hook(gen_hook(mask))
 
         for sampled_output in self.multinomial_outputs:
+            print("sampled output : ", sampled_output)
             sampled_output.reinforce(reward)
+            print("sampled output after reinforce: ", sampled_output)
             grad_output.append(None)
-        # torch.autograd.backward(self.multinomial_outputs, grad_output,
-        # retain_variables=True) #CHANGE
+        torch.autograd.backward(self.multinomial_outputs, grad_output, retain_variables=True) #CHANGE
 
 
 def gather_numpy(t, dim, index):
