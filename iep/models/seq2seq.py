@@ -265,32 +265,48 @@ class Seq2Seq(tf.keras.Model):
 
     def reinforce_sample(self, x, max_length=30, temperature=1.0, argmax=False):
         N, T = tf.shape(x)[0], max_length
+        #print("N, T  : ", N, T)
         encoded = self.encoder(x)
+        #print("encoded shape : ", encoded.shape)
         y = tf.dtypes.cast(tf.fill([N, T], self.NULL), dtype=tf.int64)
         done = tf.dtypes.cast(tf.fill([N], 0), dtype=tf.int8)
+        #print("y shape : ", y.shape," done shape : ", done.shape)
         cur_input = tf.Variable(tf.dtypes.cast(tf.fill([N, 1], self.START), dtype=x.dtype))
+        #print("cur_iput shape : ", cur_input.shape)
         h, c = None, None
         self.multinomial_outputs = []
         self.multinomial_probs = []
         for t in range(T):
             # logprobs is N x 1 x V
             logprobs, h, c = self.decoder(encoded, cur_input, h0=h, c0=c)
+            #print("logprobs shape and type: ", logprobs.shape, logprobs.dtype)
             logprobs = logprobs / temperature
             probs = tf.nn.softmax(tf.reshape(logprobs, [N, -1]))  # Now N x V
+            #print("probs shape and type: ", probs.shape, probs.dtype)
             if argmax:
                 _, cur_output = probs.max(1)
             else:
-                cur_output = probs.multinomial()  # Now N x 1
+                probs_np = probs.numpy().astype(float)
+                probs_np /= probs_np.sum()
+                cur_output = tf.convert_to_tensor(np.random.multinomial(1, probs_np))  # Now N x 1
+            #print("cur_output shape and type: ", cur_output.shape, cur_output.dtype)
             self.multinomial_outputs.append(cur_output)
             self.multinomial_probs.append(probs)
-            cur_output_data = cur_output.read_value()
+            cur_output_data = cur_output
             not_done = logical_not(done)
+            if isinstance(y,  np.ndarray):
+                continue
+            else:
+                y = y.numpy()
+            not_done = not_done.numpy()
+            cur_output_data = cur_output_data.numpy()
             y[:, t][not_done] = cur_output_data[not_done]
-            done = logical_or(done, cur_output_data.cpu() == self.END)
-            cur_input = cur_output
-            if done.sum() == N:
+            #y = y[:, t][not_done].assign(cur_output_data[not_done])
+            done = logical_or(done, tf.convert_to_tensor(np.where(cur_output_data == self.END, 1, 0), dtype=tf.int8))
+            cur_input = tf.reshape(cur_output, [-1, 1])
+            if done.numpy().sum() == N:
                 break
-        return tf.Variable(tf.dtypes.cast(y, dtype=x.dtype))
+        return tf.Variable(tf.convert_to_tensor(y, dtype=x.dtype))
 
     def reinforce_backward(self, reward, output_mask=None):  # TODO make necessary changes
         """
@@ -349,7 +365,7 @@ def logical_and(x, y):
 
 
 def logical_or(x, y):
-    return (x + y).clamp_(0, 1)
+    return tf.clip_by_value(tf.dtypes.cast((x + y), dtype=tf.int32), clip_value_min=0, clip_value_max=1)
 
 
 def logical_not(x):
