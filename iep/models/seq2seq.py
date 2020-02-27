@@ -249,16 +249,15 @@ class Seq2Seq(tf.keras.Model):
         # TODO: Handle sampling for minibatch inputs
         # TODO: Beam search?
         self.multinomial_outputs = None
-        assert x.shape(0) == 1, "Sampling minibatches not implemented"
+        #assert x.shape(0) == 1, "Sampling minibatches not implemented"
         encoded = self.encoder(x)
         y = [self.START]
         h0, c0 = None, None
         while True:
-            cur_y_tf = tf.dtypes.cast(tf.convert_to_tensor(
-                [y[-1]]).reshape(1, 1), dtype=x.data.dtype)
+            cur_y_tf = tf.reshape(tf.dtypes.cast(tf.convert_to_tensor([y[-1]]), dtype=x.dtype), [1, 1])
             cur_y = tf.Variable(cur_y_tf)
             logprobs, h0, c0 = self.decoder(encoded, cur_y, h0=h0, c0=c0)
-            _, next_y = logprobs.data.max(2)
+            _, next_y = logprobs.max(2)
             y.append(next_y[0, 0, 0])
             if len(y) >= max_length or y[-1] == self.END:
                 break

@@ -213,14 +213,22 @@ def train_loop(args, train_loader, val_loader):
 
     pg_best_state, ee_best_state, baseline_best_state = None, None, None
 
-    checkpoint = ModelCheckpoint(args.checkpoint_path,
-                                 monitor='loss',
+    pg_checkpoint = ModelCheckpoint(args.checkpoint_path,
+                                 monitor='val_accuracy',
                                  verbose=1,
                                  save_best_only=True,
                                  mode='min',
                                  load_weights_on_restart=True)
-    checkpoint_dir = './training_checkpoints'
-    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+    ee_checkpoint = ModelCheckpoint(args.checkpoint_path,
+                                    monitor='val_accuracy',
+                                    verbose=1,
+                                    save_best_only=True,
+                                    mode='min',
+                                    load_weights_on_restart=True)
+    pg_checkpoint_dir = './pg_training_checkpoints'
+    pg_checkpoint_prefix = os.path.join(pg_checkpoint_dir, "ckpt")
+    ee_checkpoint_dir = './ee_training_checkpoints'
+    ee_checkpoint_prefix = os.path.join(ee_checkpoint_dir, "ckpt")
     # Set up model
     if args.model_type == 'PG' or args.model_type == 'PG+EE':
         program_generator, pg_kwargs = get_program_generator(args)
@@ -251,15 +259,16 @@ def train_loop(args, train_loader, val_loader):
 
     print('train_loader has %d samples' % len(train_loader))
     print('val_loader has %d samples' % len(val_loader))
-    data_load = batch_creater(train_loader, batch_size, False)
-    print("Data load length :", len(data_load))
+    train_data_load = batch_creater(train_loader, batch_size, False)
+    val_data_load = batch_creater(val_loader, batch_size, False)
+    print("Data load length :", len(train_data_load))
 
     while t < args.num_iterations:
         total_loss = 0
         epoch += 1
         print('Starting epoch %d' % epoch)
         print("value of t :", t)
-        for run_num, batch in enumerate(data_load):
+        for run_num, batch in enumerate(train_data_load):
             batch_loss = 0
             t += 1
             questions, _, feats, answers, programs, _ = to_tensor(
@@ -336,61 +345,34 @@ def train_loop(args, train_loader, val_loader):
                     pg_optimizer.apply_gradients(grads, multinomial_outputs)
 
             print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
-        if epoch % 2 == 0:
-            checkpoint.save(file_prefix=checkpoint_prefix)
-        if t == args.num_iterations:
-            break
+            if args.model_type == 'PG':
+                pg_checkpoint.save(file_prefix=pg_checkpoint_prefix)
+            if args.model_type == 'EE':
+                ee_checkpoint.save(file_prefix=ee_checkpoint_prefix)
+            # if t == args.num_iterations:
+            #     break
 
+            if t % args.record_loss_every == 0:
+                print(t, batch_loss)
+                stats['train_losses'].append(batch_loss)
+                stats['train_losses_ts'].append(t)
+                if reward is not None:
+                    stats['train_rewards'].append(reward)
 
+            if t % args.checkpoint_every == 0:
+                print('Checking training accuracy ... ')
+                train_acc = check_accuracy(args, program_generator, execution_engine, train_data_load)
+                print('train accuracy is', train_acc)
+                print('Checking validation accuracy ...')
+                val_acc = check_accuracy(args, program_generator, execution_engine, val_data_load)
+                print('val accuracy is ', val_acc)
+                stats['train_accs'].append(train_acc)
+                stats['val_accs'].append(val_acc)
+                stats['val_accs_ts'].append(t)
 
-
-            # if t % args.record_loss_every == 0:
-            #     print(t, loss.data[0])
-            #     stats['train_losses'].append(loss.data[0])
-            #     stats['train_losses_ts'].append(t)
-            #     if reward is not None:
-            #         stats['train_rewards'].append(reward)
-            #
-            # if t % args.checkpoint_every == 0:
-            #     print('Checking training accuracy ... ')
-            #     train_acc = check_accuracy(args, program_generator, execution_engine,
-            #                                baseline_model, train_loader)
-            #     print('train accuracy is', train_acc)
-            #     print('Checking validation accuracy ...')
-            #     val_acc = check_accuracy(args, program_generator, execution_engine,
-            #                              baseline_model, val_loader)
-            #     print('val accuracy is ', val_acc)
-            #     stats['train_accs'].append(train_acc)
-            #     stats['val_accs'].append(val_acc)
-            #     stats['val_accs_ts'].append(t)
-            #
-            #     if val_acc > stats['best_val_acc']:
-            #         stats['best_val_acc'] = val_acc
-            #         stats['model_t'] = t
-            #         best_pg_state = get_state(program_generator)
-            #         best_ee_state = get_state(execution_engine)
-            #         best_baseline_state = get_state(baseline_model)
-            #
-            #     checkpoint = {
-            #         'args': args.__dict__,
-            #         'program_generator_kwargs': pg_kwargs,
-            #         'program_generator_state': best_pg_state,
-            #         'execution_engine_kwargs': ee_kwargs,
-            #         'execution_engine_state': best_ee_state,
-            #         'baseline_kwargs': baseline_kwargs,
-            #         'baseline_state': best_baseline_state,
-            #         'baseline_type': baseline_type,
-            #         'vocab': vocab
-            #     }
-            #     for k, v in stats.items():
-            #         checkpoint[k] = v
-            #     print('Saving checkpoint to %s' % args.checkpoint_path)
-            #     torch.save(checkpoint, args.checkpoint_path)
-            #     del checkpoint['program_generator_state']
-            #     del checkpoint['execution_engine_state']
-            #     del checkpoint['baseline_state']
-            #     with open(args.checkpoint_path + '.json', 'w') as f:
-            #         json.dump(checkpoint, f)
+                if val_acc > stats['best_val_acc']:
+                    stats['best_val_acc'] = val_acc
+                    stats['model_t'] = t
 
         if t == args.num_iterations:
             break
@@ -455,54 +437,47 @@ def set_mode(mode, models):
             m.eval()
 
 
-def check_accuracy(
-        args,
-        program_generator,
-        execution_engine,
-        baseline_model,
-        loader):
-    set_mode('eval', [program_generator, execution_engine, baseline_model])
+def check_accuracy(args, program_generator, execution_engine, loader):
+    #set_mode('eval', [program_generator, execution_engine])
     num_correct, num_samples = 0, 0
-    for batch in loader:
-        questions, _, feats, answers, programs, _ = batch
+    for run_num, batch in enumerate(loader):
 
-        questions_var = tf.Variable(questions.cuda(), volatile=True)
-        feats_var = tf.Variable(feats.cuda(), volatile=True)
-        answers_var = tf.Variable(feats.cuda(), volatile=True)
+        questions, _, feats, answers, programs, _ = to_tensor(
+            batch[0]), batch[1], to_tensor(
+            batch[2]), to_tensor(
+            batch[3]), to_tensor(
+            batch[4]), batch[5]
+
+        questions_var = tf.Variable(questions)
+        feats_var = tf.Variable(feats, trainable=True)
+        answers_var = tf.Variable(answers, trainable=True)
         if programs[0] is not None:
-            programs_var = tf.Variable(programs.cuda(), volatile=True)
+            programs_var = tf.Variable(programs, trainable=True)
 
         scores = None  # Use this for everything but PG
         if args.model_type == 'PG':
             vocab = utils.load_vocab(args.vocab_json)
             for i in range(questions.size(0)):
-                program_pred = program_generator.sample(
-                    tf.Variable(questions[i:i + 1].cuda(), volatile=True))
-                program_pred_str = iep.preprocess.decode(
-                    program_pred, vocab['program_idx_to_token'])
-                program_str = iep.preprocess.decode(
-                    programs[i], vocab['program_idx_to_token'])
+                program_pred = program_generator.sample(tf.Variable(questions[i:i + 1]))
+                program_pred_str = iep.preprocess.decode(program_pred, vocab['program_idx_to_token'])
+                program_str = iep.preprocess.decode(programs[i], vocab['program_idx_to_token'])
                 if program_pred_str == program_str:
                     num_correct += 1
                 num_samples += 1
         elif args.model_type == 'EE':
             scores = execution_engine(feats_var, programs_var)
         elif args.model_type == 'PG+EE':
-            programs_pred = program_generator.reinforce_sample(
-                questions_var, argmax=True)
+            programs_pred = program_generator.reinforce_sample(questions_var, argmax=True)
             scores = execution_engine(feats_var, programs_pred)
-        elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
-            scores = baseline_model(questions_var, feats_var)
 
         if scores is not None:
-            _, preds = scores.data.cpu().max(1)
+            _, preds = scores.max(1)
             num_correct += (preds == answers).sum()
             num_samples += preds.size(0)
 
         if num_samples >= args.num_val_samples:
             break
 
-    set_mode('train', [program_generator, execution_engine, baseline_model])
     acc = float(num_correct) / num_samples
     return acc
 
