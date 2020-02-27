@@ -176,9 +176,9 @@ def batch_creater(data, batch_size, drop_last):
     batch = (q, a, f, ans, pro, l)
     j = 0
     big_batch = []
-    print("Length of data set : ", len(data))
-    trimmed_data = len(data)/600
-    print("trimmed length : ", int(trimmed_data))
+    #print("Length of data set : ", len(data))
+    trimmed_data = len(data)/60
+    #print("trimmed length : ", int(trimmed_data))
     for i in range(int(trimmed_data)):
         for k in range(6):
             batch[k].append(data[i][k])
@@ -261,13 +261,13 @@ def train_loop(args, train_loader, val_loader):
     print('val_loader has %d samples' % len(val_loader))
     train_data_load = batch_creater(train_loader, batch_size, False)
     val_data_load = batch_creater(val_loader, batch_size, False)
-    print("Data load length :", len(train_data_load))
+    print("train data load length :", len(train_data_load))
 
     while t < args.num_iterations:
         total_loss = 0
         epoch += 1
         print('Starting epoch %d' % epoch)
-        print("value of t :", t)
+        #print("value of t :", t)
         for run_num, batch in enumerate(train_data_load):
             batch_loss = 0
             t += 1
@@ -343,17 +343,17 @@ def train_loop(args, train_loader, val_loader):
                     print("multi op shape new : ", multinomial_outputs.shape)
                     grads = pg_tape.gradient(loss, multinomial_outputs)
                     pg_optimizer.apply_gradients(grads, multinomial_outputs)
-
             print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
+            logs = {}
             if args.model_type == 'PG':
-                pg_checkpoint.save(file_prefix=pg_checkpoint_prefix)
+                pg_checkpoint._save_model(epoch, logs)
             if args.model_type == 'EE':
-                ee_checkpoint.save(file_prefix=ee_checkpoint_prefix)
+                ee_checkpoint._save_model(epoch, logs)
             # if t == args.num_iterations:
             #     break
 
             if t % args.record_loss_every == 0:
-                print(t, batch_loss)
+                #print(t, batch_loss)
                 stats['train_losses'].append(batch_loss)
                 stats['train_losses_ts'].append(t)
                 if reward is not None:
@@ -457,7 +457,7 @@ def check_accuracy(args, program_generator, execution_engine, loader):
         scores = None  # Use this for everything but PG
         if args.model_type == 'PG':
             vocab = utils.load_vocab(args.vocab_json)
-            for i in range(questions.size(0)):
+            for i in range(tf.shape(questions)[0]):
                 program_pred = program_generator.sample(tf.Variable(questions[i:i + 1]))
                 program_pred_str = iep.preprocess.decode(program_pred, vocab['program_idx_to_token'])
                 program_str = iep.preprocess.decode(programs[i], vocab['program_idx_to_token'])
@@ -471,7 +471,8 @@ def check_accuracy(args, program_generator, execution_engine, loader):
             scores = execution_engine(feats_var, programs_pred)
 
         if scores is not None:
-            _, preds = scores.max(1)
+            #_, preds = scores.max(1)
+            tf.math.reduce_max(scores, axis=1, keepdims=True)
             num_correct += (preds == answers).sum()
             num_samples += preds.size(0)
 

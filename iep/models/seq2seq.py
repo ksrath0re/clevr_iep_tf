@@ -239,7 +239,7 @@ class Seq2Seq(tf.keras.Model):
 
     def __call__(self, x, y):
         encoded = self.encoder(x)
-        print("Encoded ka type : ", type(encoded))
+        #print("Encoded ka type : ", type(encoded))
         output_logprobs, _, _ = self.decoder(encoded, y)
 
         loss = self.compute_loss(output_logprobs, y)
@@ -257,7 +257,8 @@ class Seq2Seq(tf.keras.Model):
             cur_y_tf = tf.reshape(tf.dtypes.cast(tf.convert_to_tensor([y[-1]]), dtype=x.dtype), [1, 1])
             cur_y = tf.Variable(cur_y_tf)
             logprobs, h0, c0 = self.decoder(encoded, cur_y, h0=h0, c0=c0)
-            _, next_y = logprobs.max(2)
+            #_, next_y = logprobs.max(2)
+            next_y = tf.math.reduce_max(logprobs, axis=2, keepdims=True)
             y.append(next_y[0, 0, 0])
             if len(y) >= max_length or y[-1] == self.END:
                 break
