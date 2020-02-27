@@ -329,9 +329,10 @@ class Seq2Seq(tf.keras.Model):
         #         probs.register_hook(gen_hook(mask))
 
         N = len(self.multinomial_outputs)
-        for sampled_output in self.multinomial_outputs:
+        for sampled_output in self.multinomial_probs:
             print("sampled output : ", sampled_output)
-            m = tfp.distributions.Multinomial(N)
+            sample_output = tf.dtypes.cast(sampled_output, dtype=tf.float32)
+            m = tfp.distributions.Multinomial(N, probs=sampled_output)
             loss = m.log_prob(sampled_output) * reward
 
             #grad_output.append(None)

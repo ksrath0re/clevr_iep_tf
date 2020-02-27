@@ -329,8 +329,11 @@ def train_loop(args, train_loader, val_loader):
 
                 if args.train_program_generator == 1:
                     loss, multinomial_outputs = program_generator.reinforce_backward(centered_reward)
+                    multinomial_outputs = tf.concat(multinomial_outputs, 0)
+                    multinomial_outputs = tf.Variable(multinomial_outputs)
+                    print("multi op shape new : ", multinomial_outputs.shape)
                     grads = pg_tape.gradient(loss, multinomial_outputs)
-                    pg_optimizer.apply_gradients(zip(grads, multinomial_outputs))
+                    pg_optimizer.apply_gradients(grads, multinomial_outputs)
 
             print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
         if epoch % 2 == 0:
