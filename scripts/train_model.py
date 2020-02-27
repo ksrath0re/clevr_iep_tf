@@ -328,7 +328,9 @@ def train_loop(args, train_loader, val_loader):
                     ee_optimizer.apply_gradients(zip(gradients, execution_engine.trainable_variables))
 
                 if args.train_program_generator == 1:
-                    program_generator.reinforce_backward(centered_reward)
+                    loss, multinomial_outputs = program_generator.reinforce_backward(centered_reward)
+                    grads = pg_tape.gradient(loss, multinomial_outputs)
+                    pg_optimizer.apply_gradients(zip(grads, multinomial_outputs))
 
             print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
         if epoch % 2 == 0:

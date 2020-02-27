@@ -10,6 +10,7 @@
 import tensorflow as tf
 from iep.embedding import expand_embedding_vocab
 import numpy as np
+import tensorflow_probability as tfp
 
 
 class Encoder(tf.keras.Model):
@@ -327,12 +328,15 @@ class Seq2Seq(tf.keras.Model):
         #         mask = tf.Variable(output_mask[:, t])
         #         probs.register_hook(gen_hook(mask))
 
+        N = len(self.multinomial_outputs)
         for sampled_output in self.multinomial_outputs:
             print("sampled output : ", sampled_output)
-            sampled_output.reinforce(reward)
-            print("sampled output after reinforce: ", sampled_output)
-            grad_output.append(None)
-        torch.autograd.backward(self.multinomial_outputs, grad_output, retain_variables=True) #CHANGE
+            m = tfp.distributions.Multinomial(N)
+            loss = m.log_prob(sampled_output) * reward
+
+            #grad_output.append(None)
+        return loss, self.multinomial_outputs
+        #torch.autograd.backward(self.multinomial_outputs, grad_output, retain_variables=True) #CHANGE
 
 
 def gather_numpy(t, dim, index):
