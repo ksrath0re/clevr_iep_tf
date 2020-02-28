@@ -343,7 +343,7 @@ def train_loop(args, train_loader, val_loader):
                     print("multi op shape new : ", multinomial_outputs.shape)
                     grads = pg_tape.gradient(loss, multinomial_outputs)
                     pg_optimizer.apply_gradients(grads, multinomial_outputs)
-            #print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
+            print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
             logs = {}
             if args.model_type == 'PG':
                 pg_checkpoint._save_model(epoch, logs)
@@ -461,12 +461,12 @@ def check_accuracy(args, program_generator, execution_engine, loader):
                 q = tf.Variable(questions[i:i + 1])
                 q = tf.dtypes.cast(q.read_value(), dtype=tf.int32)
                 program_pred = program_generator.sample(tf.Variable(q))
-                print("program_pred : ", program_pred)
+                #print("program_pred : ", program_pred)
                 program_pred_str = iep.preprocess.decode(program_pred, vocab['program_idx_to_token'])
-                print("program_pred_str : ", program_pred_str)
-                print("program__i : ", programs[i])
+                #print("program_pred_str : ", program_pred_str)
+                #print("program__i : ", programs[i])
                 program_str = iep.preprocess.decode(programs[i].numpy(), vocab['program_idx_to_token'])
-                print("program__str : ", program_str)
+                #print("program__str : ", program_str)
                 if program_pred_str == program_str:
                     num_correct += 1
                 num_samples += 1
@@ -478,9 +478,10 @@ def check_accuracy(args, program_generator, execution_engine, loader):
 
         if scores is not None:
             #_, preds = scores.max(1)
-            tf.math.reduce_max(scores, axis=1, keepdims=True)
+            preds = tf.math.argmax(scores, axis=1, output_type=tf.dtypes.int32)
             num_correct += (preds == answers).sum()
-            num_samples += preds.size(0)
+            num_correct += (np.where(np.equal(preds.numpy(), answers.numpy()), 1, 0)).sum()
+            num_samples += tf.shape(preds)[0]
 
         if num_samples >= args.num_val_samples:
             break

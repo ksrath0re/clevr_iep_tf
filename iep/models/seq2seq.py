@@ -259,23 +259,23 @@ class Seq2Seq(tf.keras.Model):
         # TODO: Handle sampling for minibatch inputs
         # TODO: Beam search?
         self.multinomial_outputs = None
-        print("x : ", x)
+        #print("x : ", x)
         x = tf.dtypes.cast(x, dtype=tf.int32)
         #assert x.shape(0) == 1, "Sampling minibatches not implemented"
         encoded = self.encoder(x)
-        print("encoded :", encoded)
+        #print("encoded :", encoded)
         y = [self.START]
         h0, c0, i  = None, None, 0
         while True:
             cur_y_tf = tf.reshape(tf.dtypes.cast(tf.convert_to_tensor([y[-1]]), dtype=x.dtype), [1, 1])
             cur_y = tf.Variable(cur_y_tf)
-            if i == 0 : print("cur_y ", cur_y)
+            #if i == 0 : print("cur_y ", cur_y)
             logprobs, h0, c0 = self.decoder(encoded, cur_y, h0=h0, c0=c0)
             #_, next_y = logprobs.max(2)
-            if i ==0 : print("logprobs : ", logprobs)
+            #if i ==0 : print("logprobs : ", logprobs)
             next_y = tf.math.argmax(logprobs, axis=2, output_type=tf.dtypes.int32)
             next_y = tf.reshape(next_y, [1, 1, -1])
-            if i == 0 : print("next_y : ", next_y.shape, next_y)
+            #if i == 0 : print("next_y : ", next_y.shape, next_y)
             y.append(next_y.numpy()[0, 0, 0])
             i = 1
             if len(y) >= max_length or y[-1] == self.END:
