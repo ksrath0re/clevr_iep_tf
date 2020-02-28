@@ -27,19 +27,23 @@ class Encoder(tf.keras.Model):
         self.encoder_rnn1 = tf.keras.layers.LSTM(
             hidden_dim,
             dropout=rnn_dropout,
+            recurrent_dropout=rnn_dropout,
             return_sequences=True,
             return_state=True)
         self.encoder_rnn2 = tf.keras.layers.LSTM(
             hidden_dim,
             dropout=rnn_dropout,
+            recurrent_dropout=rnn_dropout,
             return_sequences=True,
             return_state=True)
 
     def call(self, x, hidden):
         x = self.embedding(x)
+        #print("embed : ", x)
         x, state_h, state_c = self.encoder_rnn1(x)
         state = [state_h, state_c]
         output, state_h, state_c = self.encoder_rnn2(x, initial_state=state)
+        #print("out : ", output)
         return output, state_h, state_c
 
     def initialize_hidden_state(self):
@@ -159,12 +163,16 @@ class Seq2Seq(tf.keras.Model):
                     idx_np[i] = t
                     break
         idx = tf.convert_to_tensor(idx_np, dtype=tf.int64)
-        idx = tf.dtypes.cast(idx, dtype=tf.int64)
-        x_np = x.read_value().numpy()
-        for i, v in enumerate(x_np):
-            if (v.any() == 0):
-                x_np[i] = 0
-        x = tf.Variable(tf.convert_to_tensor(x_np, dtype=tf.float32))
+        #idx = tf.dtypes.cast(idx, dtype=x.dtype)
+        #x_np = x.read_value().numpy()
+        #print("x before condition : ", x)
+        #for i, v in enumerate(x_np):
+        #    if (v.any() == 0):
+        #        x_np[i] = 0
+        #print("x after condition : ", x_np)
+        #x = tf.Variable(tf.convert_to_tensor(x_np, dtype=tf.int64))
+        #print("x after condition : ", x)
+        #print("idx : ", idx)
         return x, tf.Variable(idx)
 
     def encoder(self, x):
@@ -179,11 +187,13 @@ class Seq2Seq(tf.keras.Model):
             self.rnn_dropout)
         hidden = encoder_ob.initialize_hidden_state()
         out, _, _ = encoder_ob(x, hidden)
-
+        #print("out : ", out)
         # Pull out the hidden state for the last non-null value in each input
         idx = tf.broadcast_to(tf.reshape(idx, [N, 1, 1]), [N, 1, H])
-        t = gather_numpy(out, 1, idx)
-
+        #print("idx value ", idx)
+        t = tf.convert_to_tensor(np.take_along_axis(out.numpy(), idx.numpy(), axis=1))
+        #t = gather_numpy(out, 1, idx)
+        #print("t : ", t)
         return tf.reshape(t, [N, H])
 
     def decoder(self, encoded, y, h0=None, c0=None):
@@ -249,17 +259,25 @@ class Seq2Seq(tf.keras.Model):
         # TODO: Handle sampling for minibatch inputs
         # TODO: Beam search?
         self.multinomial_outputs = None
+        print("x : ", x)
+        x = tf.dtypes.cast(x, dtype=tf.int32)
         #assert x.shape(0) == 1, "Sampling minibatches not implemented"
         encoded = self.encoder(x)
+        print("encoded :", encoded)
         y = [self.START]
-        h0, c0 = None, None
+        h0, c0, i  = None, None, 0
         while True:
             cur_y_tf = tf.reshape(tf.dtypes.cast(tf.convert_to_tensor([y[-1]]), dtype=x.dtype), [1, 1])
             cur_y = tf.Variable(cur_y_tf)
+            if i == 0 : print("cur_y ", cur_y)
             logprobs, h0, c0 = self.decoder(encoded, cur_y, h0=h0, c0=c0)
             #_, next_y = logprobs.max(2)
-            next_y = tf.math.reduce_max(logprobs, axis=2, keepdims=True)
-            y.append(next_y[0, 0, 0])
+            if i ==0 : print("logprobs : ", logprobs)
+            next_y = tf.math.argmax(logprobs, axis=2, output_type=tf.dtypes.int32)
+            next_y = tf.reshape(next_y, [1, 1, -1])
+            if i == 0 : print("next_y : ", next_y.shape, next_y)
+            y.append(next_y.numpy()[0, 0, 0])
+            i = 1
             if len(y) >= max_length or y[-1] == self.END:
                 break
         return y
