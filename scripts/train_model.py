@@ -483,9 +483,10 @@ def check_accuracy(args, program_generator, execution_engine, loader):
         if scores is not None:
             #_, preds = scores.max(1)
             preds = tf.math.argmax(scores, axis=1, output_type=tf.dtypes.int32)
-            num_correct += (preds == answers).sum()
+            #num_correct += (preds == answers).sum()
             num_correct += (np.where(np.equal(preds.numpy(), answers.numpy()), 1, 0)).sum()
-            num_samples += tf.shape(preds)[0]
+            num_samples += tf.shape(preds)[0].numpy()
+            print("num_correct , num_samples : ", num_correct , num_samples)
 
         if num_samples >= args.num_val_samples:
             break

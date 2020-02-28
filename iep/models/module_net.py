@@ -216,7 +216,7 @@ class ModuleNet(tf.keras.Model):
           each image.
         """
         N = tf.shape(feats)[0]
-        print("_forward_modules_ints ")
+        #print("_forward_modules_ints ")
         final_module_outputs = []
         self.used_fns = tf.fill(tf.shape(program), 0)
         self.used_fns = self.used_fns.numpy()
@@ -230,8 +230,8 @@ class ModuleNet(tf.keras.Model):
     def __call__(self, x, program):
         N = tf.shape(x)[0]
         feats = self.stem(x)
-        print("type of feats_var after stem: ", type(feats))
-        print("shape of feats : ", feats.shape)
+        #print("type of feats_var after stem: ", type(feats))
+        #print("shape of feats : ", feats.shape)
         #print("dim() are : ", program.dim())
         feats = tf.transpose(feats, perm=[0, 3, 1, 2])
         if type(program) is list or type(program) is tuple:
