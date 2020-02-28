@@ -473,6 +473,8 @@ def check_accuracy(args, program_generator, execution_engine, loader):
                     num_correct += 1
                 num_samples += 1
         elif args.model_type == 'EE':
+            feats = tf.transpose(feats_var, perm=[0, 2, 3, 1])
+            feats_var = tf.Variable(feats)
             scores = execution_engine(feats_var, programs_var)
         elif args.model_type == 'PG+EE':
             programs_pred = program_generator.reinforce_sample(questions_var, argmax=True)
