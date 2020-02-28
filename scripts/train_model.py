@@ -213,18 +213,18 @@ def train_loop(args, train_loader, val_loader):
 
     pg_best_state, ee_best_state, baseline_best_state = None, None, None
 
-    pg_checkpoint = ModelCheckpoint(args.checkpoint_path,
-                                 monitor='val_accuracy',
-                                 verbose=1,
-                                 save_best_only=True,
-                                 mode='min',
-                                 load_weights_on_restart=True)
-    ee_checkpoint = ModelCheckpoint(args.checkpoint_path,
-                                    monitor='val_accuracy',
-                                    verbose=1,
-                                    save_best_only=True,
-                                    mode='min',
-                                    load_weights_on_restart=True)
+    # pg_checkpoint = ModelCheckpoint(args.checkpoint_path,
+    #                              monitor='val_accuracy',
+    #                              verbose=1,
+    #                              save_best_only=True,
+    #                              mode='min',
+    #                              load_weights_on_restart=True)
+    # ee_checkpoint = ModelCheckpoint(args.checkpoint_path,
+    #                                 monitor='val_accuracy',
+    #                                 verbose=1,
+    #                                 save_best_only=True,
+    #                                 mode='min',
+    #                                 load_weights_on_restart=True)
     pg_checkpoint_dir = './pg_training_checkpoints'
     pg_checkpoint_prefix = os.path.join(pg_checkpoint_dir, "ckpt")
     ee_checkpoint_dir = './ee_training_checkpoints'
@@ -344,11 +344,7 @@ def train_loop(args, train_loader, val_loader):
                     grads = pg_tape.gradient(loss, multinomial_outputs)
                     pg_optimizer.apply_gradients(grads, multinomial_outputs)
             print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
-            logs = {}
-            if args.model_type == 'PG':
-                pg_checkpoint._save_model(epoch, logs)
-            if args.model_type == 'EE':
-                ee_checkpoint._save_model(epoch, logs)
+
             # if t == args.num_iterations:
             #     break
 
@@ -373,6 +369,12 @@ def train_loop(args, train_loader, val_loader):
                 if val_acc > stats['best_val_acc']:
                     stats['best_val_acc'] = val_acc
                     stats['model_t'] = t
+                    if args.model_type == 'PG':
+                        checkpoint = tf.train.Checkpoint(optimizer=pg_optimizer, model=program_generator)
+                        checkpoint.save(file_prefix=pg_checkpoint_prefix)
+                    if args.model_type == 'EE':
+                        checkpoint = tf.train.Checkpoint(optimizer=ee_optimizer, model=execution_engine)
+                        checkpoint.save(file_prefix=ee_checkpoint_prefix)
 
         if t == args.num_iterations:
             break
