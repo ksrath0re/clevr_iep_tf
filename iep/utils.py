@@ -10,9 +10,8 @@ import tensorflow as tf
 # LICENSE file in the root directory of this source tree.
 
 import json
-import torch
 
-from iep.models import ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel
+from iep.models.seq2seq import Seq2Seq
 
 
 def invert_dict(d):
@@ -39,11 +38,11 @@ def load_cpu(path):
     """
     Loads a torch checkpoint, remapping all Tensors to CPU
     """
-    return tf.train.load_checkpoint(path, map_location=lambda storage, loc: storage)
+    return tf.train.load_checkpoint(path)
 
 
 def load_program_generator(path):
-    checkpoint = load_cpu(path)#TODO replacement of load_cpu
+    checkpoint = load_cpu(path)
     kwargs = checkpoint['program_generator_kwargs']
     state = checkpoint['program_generator_state']
     model = Seq2Seq(**kwargs)
