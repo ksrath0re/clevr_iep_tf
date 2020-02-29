@@ -10,6 +10,7 @@
 import tensorflow as tf
 from iep.embedding import expand_embedding_vocab
 import numpy as np
+import tensorflow_probability as tfp
 
 
 class Encoder(tf.keras.Model):
@@ -26,28 +27,27 @@ class Encoder(tf.keras.Model):
         self.encoder_rnn1 = tf.keras.layers.LSTM(
             hidden_dim,
             dropout=rnn_dropout,
+            recurrent_dropout=rnn_dropout,
             return_sequences=True,
             return_state=True)
         self.encoder_rnn2 = tf.keras.layers.LSTM(
             hidden_dim,
             dropout=rnn_dropout,
+            recurrent_dropout=rnn_dropout,
             return_sequences=True,
             return_state=True)
 
     def call(self, x, hidden):
         x = self.embedding(x)
+        #print("embed : ", x)
         x, state_h, state_c = self.encoder_rnn1(x)
-        #x = self.encoder_rnn1(x)
-        #print("size of output : ", len(x))
-        # for i, item in enumerate(x):
-        #    print("Shape of ", i, " : ", item.shape)
         state = [state_h, state_c]
         output, state_h, state_c = self.encoder_rnn2(x, initial_state=state)
+        #print("out : ", output)
         return output, state_h, state_c
 
     def initialize_hidden_state(self):
         return tf.zeros((self.hidden_dim, self.hidden_dim))
-        # return tf.eye(self.hidden_dim, batch_shape=[64])
 
 
 class Decoder(tf.keras.Model):
@@ -75,23 +75,14 @@ class Decoder(tf.keras.Model):
             decoder_vocab_size, input_shape=(hidden_dim,))
 
     def call(self, hidden, y, encoded, N, H, T_out, V_out):
-        print("T_out : ", T_out)
         y_embed = self.decoder_embedding(y)
-        print("y_embed ka shape after embedding : ", y_embed.shape)
         y_embed = tf.reshape(
             y_embed, [y_embed.shape[0], -1, y_embed.shape[-1]])
-        # encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
-        print("Encoded ka shape : ", encoded.shape)
         encoded_repeat = tf.broadcast_to(
             tf.reshape(
                 encoded, [
                     N, 1, H]), [
                 N, T_out, H])
-        print(
-            "Encoded Repeat ka shape : ",
-            encoded_repeat.shape,
-            " y_embed ka shape : ",
-            y_embed.shape)
         rnn_input = tf.concat([encoded_repeat, y_embed], 2)
 
         x, state_h, state_c = self.decoder_rnn1(rnn_input)
@@ -105,7 +96,6 @@ class Decoder(tf.keras.Model):
 
     def initialize_hidden_state(self):
         return tf.zeros((self.hidden_dim, self.hidden_dim))
-        # return tf.eye(self.hidden_dim, batch_shape=[64])
 
 
 class Seq2Seq(tf.keras.Model):
@@ -135,13 +125,6 @@ class Seq2Seq(tf.keras.Model):
 
         self.decoder_embed2 = tf.keras.layers.Embedding(
             decoder_vocab_size, wordvec_dim)
-        # self.decoder_rnn = tf.keras.layers.LSTM(hidden_dim, dropout=rnn_dropout) for _ in range(rnn_num_layers)
-        # self.decoder_rnn = tf.keras.layers.StackedRNNCells(
-        #   decoder_cells, input_shape=(wordvec_dim + hidden_dim,))
-        #    LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
-        # dropout=rnn_dropout, batch_first=True)
-        # self.decoder_linear = tf.keras.layers.Dense(
-        #     decoder_vocab_size, input_shape=(hidden_dim,))
         self.NULL = null_token
         self.START = start_token
         self.END = end_token
@@ -171,7 +154,6 @@ class Seq2Seq(tf.keras.Model):
         N, T = tf.shape(x)
         idx = tf.dtypes.cast(tf.fill([N], (T - 1)), dtype=tf.int64)
         idx_np = idx.numpy()
-        # print("Idx np size :", len(idx_np))
 
         # Find the last non-null element in each sequence. Is there a clean
         # way to do this?
@@ -181,20 +163,23 @@ class Seq2Seq(tf.keras.Model):
                     idx_np[i] = t
                     break
         idx = tf.convert_to_tensor(idx_np, dtype=tf.int64)
-        idx = tf.dtypes.cast(idx, dtype=tf.int64)
-        # print("Idx np tensor size :", idx.shape)
-        x_np = x.read_value().numpy()
-        for i, v in enumerate(x_np):
-            if (v.any() == 0):
-                x_np[i] = 0
-        x = tf.Variable(tf.convert_to_tensor(x_np, dtype=tf.float32))
+        #idx = tf.dtypes.cast(idx, dtype=x.dtype)
+        #x_np = x.read_value().numpy()
+        #print("x before condition : ", x)
+        #for i, v in enumerate(x_np):
+        #    if (v.any() == 0):
+        #        x_np[i] = 0
+        #print("x after condition : ", x_np)
+        #x = tf.Variable(tf.convert_to_tensor(x_np, dtype=tf.int64))
+        #print("x after condition : ", x)
+        #print("idx : ", idx)
         return x, tf.Variable(idx)
 
     def encoder(self, x):
-        print("Shape of X :  ", x.shape)
+        #print("Shape of X :  ", x.shape)
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
         x, idx = self.before_rnn(x)
-        print("Shape of X after before_rnn:", x.shape)
+        #print("Shape of X after before_rnn:", x.shape)
         encoder_ob = Encoder(
             self.encoder_vocab_size,
             self.wordvec_dim,
@@ -202,28 +187,19 @@ class Seq2Seq(tf.keras.Model):
             self.rnn_dropout)
         hidden = encoder_ob.initialize_hidden_state()
         out, _, _ = encoder_ob(x, hidden)
-
+        #print("out : ", out)
         # Pull out the hidden state for the last non-null value in each input
-        print("idx Shape :", idx.shape, " out shape : ", out.shape)
         idx = tf.broadcast_to(tf.reshape(idx, [N, 1, 1]), [N, 1, H])
-        print("idx Shape after broadcast ", idx.shape)
-        t = gather_numpy(out, 1, idx)
-        print(" t ka shape : ", t.shape)
-
+        #print("idx value ", idx)
+        t = tf.convert_to_tensor(np.take_along_axis(out.numpy(), idx.numpy(), axis=1))
+        #t = gather_numpy(out, 1, idx)
+        #print("t : ", t)
         return tf.reshape(t, [N, H])
 
     def decoder(self, encoded, y, h0=None, c0=None):
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
-        print("T_out in decoder starting : ", T_out)
-        print("Shape of Y after before_rnn:", y.shape)
         if T_out > 1:
             y, _ = self.before_rnn(y)
-        print("Shape of Y after before_rnn:", y.shape)
-
-        # if h0 is None:
-        #     h0 = tf.Variable(tf.zeros([L, N, H], encoded.dtype))
-        # if c0 is None:
-        #     c0 = tf.Variable(tf.zeros([L, N, H], encoded.dtype))
         decoder_ob = Decoder(
             self.decoder_vocab_size,
             self.wordvec_dim,
@@ -250,38 +226,32 @@ class Seq2Seq(tf.keras.Model):
     """
         self.multinomial_outputs = None
         V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
-        print("V_in, V_out, D, H, L, N, T_in, T_out : ", V_in, V_out, D, H, L, N, T_in, T_out)
         n = y.read_value().numpy()
-        print(" Y before masking  ka shape :", y.shape)
         mask = tf.convert_to_tensor(np.where(n != 0, 1, 0), dtype=tf.int32)
-        print(" mask ka shape : ", mask.shape)
-        #mask = y.data != self.NULL
         y_mask_tf = tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
         y_mask = tf.Variable(y_mask_tf)
-        print(" y_mask ka shape : ", y_mask.shape)
         y_mask = y_mask[:, 1:].assign(mask[:, 1:])
-        #y_mask[:, 1:] = mask[:, 1:]
         y_masked = tf.boolean_mask(y, y_mask)
-        #y_masked = y[y_mask]
-        print(" Y_masked ka shape :", y_masked.shape)
         out_mask_tf = tf.dtypes.cast(tf.fill([N, T_out], 0), dtype=mask.dtype)
         out_mask = tf.Variable(out_mask_tf)
-        print("out_mask ka shape : ", out_mask.shape)
-        print("mask ka shape : ", mask.shape)
         out_mask = out_mask[:, :-1].assign(mask[:, 1:])
-        out_mask = tf.broadcast_to(tf.reshape(out_mask, [N, T_out, 1]), [N, T_out, V_out])
-        print("out_mask ka shape after broadcast : ", out_mask.shape)
+        out_mask = tf.broadcast_to(
+            tf.reshape(
+                out_mask, [
+                    N, T_out, 1]), [
+                N, T_out, V_out])
         output_logprobs = tf.boolean_mask(output_logprobs, out_mask)
         out_masked = tf.reshape(output_logprobs, [-1, V_out])
-        print(" out_masked ka shape :", out_masked.shape)
-        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(out_masked, y_masked)
+        y_masked = tf.dtypes.cast(y_masked, dtype=tf.int32)
+        loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=out_masked, labels=y_masked))
+
         return loss
 
     def __call__(self, x, y):
         encoded = self.encoder(x)
-        print("Encoded ka shape : ", encoded.shape)
+        #print("Encoded ka type : ", type(encoded))
         output_logprobs, _, _ = self.decoder(encoded, y)
-        print("output logprobs ka shape :", output_logprobs.shape)
+
         loss = self.compute_loss(output_logprobs, y)
         return loss
 
@@ -289,55 +259,73 @@ class Seq2Seq(tf.keras.Model):
         # TODO: Handle sampling for minibatch inputs
         # TODO: Beam search?
         self.multinomial_outputs = None
-        assert x.shape(0) == 1, "Sampling minibatches not implemented"
+        #print("x : ", x)
+        x = tf.dtypes.cast(x, dtype=tf.int32)
+        #assert x.shape(0) == 1, "Sampling minibatches not implemented"
         encoded = self.encoder(x)
+        #print("encoded :", encoded)
         y = [self.START]
-        h0, c0 = None, None
+        h0, c0, i  = None, None, 0
         while True:
-            cur_y_tf = tf.dtypes.cast(tf.convert_to_tensor(
-                [y[-1]]).reshape(1, 1), dtype=x.data.dtype)
+            cur_y_tf = tf.reshape(tf.dtypes.cast(tf.convert_to_tensor([y[-1]]), dtype=x.dtype), [1, 1])
             cur_y = tf.Variable(cur_y_tf)
+            #if i == 0 : print("cur_y ", cur_y)
             logprobs, h0, c0 = self.decoder(encoded, cur_y, h0=h0, c0=c0)
-            _, next_y = logprobs.data.max(2)
-            y.append(next_y[0, 0, 0])
+            #_, next_y = logprobs.max(2)
+            #if i ==0 : print("logprobs : ", logprobs)
+            next_y = tf.math.argmax(logprobs, axis=2, output_type=tf.dtypes.int32)
+            next_y = tf.reshape(next_y, [1, 1, -1])
+            #if i == 0 : print("next_y : ", next_y.shape, next_y)
+            y.append(next_y.numpy()[0, 0, 0])
+            i = 1
             if len(y) >= max_length or y[-1] == self.END:
                 break
         return y
 
-    def reinforce_sample(
-            self,
-            x,
-            max_length=30,
-            temperature=1.0,
-            argmax=False):
-        N, T = x.shape(0), max_length
+    def reinforce_sample(self, x, max_length=30, temperature=1.0, argmax=False):
+        N, T = tf.shape(x)[0], max_length
+        #print("N, T  : ", N, T)
         encoded = self.encoder(x)
+        #print("encoded shape : ", encoded.shape)
         y = tf.dtypes.cast(tf.fill([N, T], self.NULL), dtype=tf.int64)
         done = tf.dtypes.cast(tf.fill([N], 0), dtype=tf.int8)
-        cur_input = tf.Variable(tf.dtypes.cast(
-            tf.fill([N, 1], self.START), dtype=x.data.dtype))
+        #print("y shape : ", y.shape," done shape : ", done.shape)
+        cur_input = tf.Variable(tf.dtypes.cast(tf.fill([N, 1], self.START), dtype=x.dtype))
+        #print("cur_iput shape : ", cur_input.shape)
         h, c = None, None
         self.multinomial_outputs = []
         self.multinomial_probs = []
         for t in range(T):
             # logprobs is N x 1 x V
             logprobs, h, c = self.decoder(encoded, cur_input, h0=h, c0=c)
+            #print("logprobs shape and type: ", logprobs.shape, logprobs.dtype)
             logprobs = logprobs / temperature
-            probs = tf.nn.softmax(logprobs.view(N, -1))  # Now N x V
+            probs = tf.nn.softmax(tf.reshape(logprobs, [N, -1]))  # Now N x V
+            #print("probs shape and type: ", probs.shape, probs.dtype)
             if argmax:
                 _, cur_output = probs.max(1)
             else:
-                cur_output = probs.multinomial()  # Now N x 1
+                probs_np = probs.numpy().astype(float)
+                probs_np /= probs_np.sum()
+                cur_output = tf.convert_to_tensor(np.random.multinomial(1, probs_np))  # Now N x 1
+            #print("cur_output shape and type: ", cur_output.shape, cur_output.dtype)
             self.multinomial_outputs.append(cur_output)
             self.multinomial_probs.append(probs)
-            cur_output_data = cur_output.data
+            cur_output_data = cur_output
             not_done = logical_not(done)
+            if isinstance(y,  np.ndarray):
+                continue
+            else:
+                y = y.numpy()
+            not_done = not_done.numpy()
+            cur_output_data = cur_output_data.numpy()
             y[:, t][not_done] = cur_output_data[not_done]
-            done = logical_or(done, cur_output_data.cpu() == self.END)
-            cur_input = cur_output
-            if done.sum() == N:
+            #y = y[:, t][not_done].assign(cur_output_data[not_done])
+            done = logical_or(done, tf.convert_to_tensor(np.where(cur_output_data == self.END, 1, 0), dtype=tf.int8))
+            cur_input = tf.reshape(cur_output, [-1, 1])
+            if done.numpy().sum() == N:
                 break
-        return tf.Variable(tf.dtypes.cast(y, dtype=x.data.dtype))
+        return tf.Variable(tf.convert_to_tensor(y, dtype=x.dtype))
 
     def reinforce_backward(self, reward, output_mask=None):  # TODO make necessary changes
         """
@@ -346,23 +334,28 @@ class Seq2Seq(tf.keras.Model):
     """
         assert self.multinomial_outputs is not None, 'Must call reinforce_sample first'
         grad_output = []
+        print("in reinforce backward --- ")
+        # def gen_hook(mask):
+        #     def hook(grad):
+        #         return grad * mask.contiguous().view(-1, 1).expand_as(grad)
+        #
+        #     return hook
 
-        def gen_hook(mask):
-            def hook(grad):
-                return grad * mask.contiguous().view(-1, 1).expand_as(grad)
+        # if output_mask is not None:
+        #     for t, probs in enumerate(self.multinomial_probs):
+        #         mask = tf.Variable(output_mask[:, t])
+        #         probs.register_hook(gen_hook(mask))
 
-            return hook
+        N = len(self.multinomial_outputs)
+        for sampled_output in self.multinomial_probs:
+            print("sampled output : ", sampled_output)
+            sample_output = tf.dtypes.cast(sampled_output, dtype=tf.float32)
+            m = tfp.distributions.Multinomial(N, probs=sampled_output)
+            loss = m.log_prob(sampled_output) * reward
 
-        if output_mask is not None:
-            for t, probs in enumerate(self.multinomial_probs):
-                mask = tf.Variable(output_mask[:, t])
-                probs.register_hook(gen_hook(mask))
-
-        for sampled_output in self.multinomial_outputs:
-            sampled_output.reinforce(reward)
-            grad_output.append(None)
-        # torch.autograd.backward(self.multinomial_outputs, grad_output,
-        # retain_variables=True) #CHANGE
+            #grad_output.append(None)
+        return loss, self.multinomial_outputs
+        #torch.autograd.backward(self.multinomial_outputs, grad_output, retain_variables=True) #CHANGE
 
 
 def gather_numpy(t, dim, index):
@@ -396,7 +389,7 @@ def logical_and(x, y):
 
 
 def logical_or(x, y):
-    return (x + y).clamp_(0, 1)
+    return tf.clip_by_value(tf.dtypes.cast((x + y), dtype=tf.int32), clip_value_min=0, clip_value_max=1)
 
 
 def logical_not(x):

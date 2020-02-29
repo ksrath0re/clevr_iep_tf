@@ -1,46 +1,58 @@
 import tensorflow as tf
-import tensorflow.nn as nn
-
-# from tensorflow.keras import
 
 
-class ResidualBlock(tf.Module):
-    def __init__(self, in_dim, out_dim=None, with_residual=True, with_batchnorm=True):
-        if out_dim is None:
-            out_dim = in_dim
+class ResidualBlock(tf.keras.Model):
+    def __init__(self, out_dim=None, with_residual=True, with_batchnorm=True):
+        #if out_dim is None:
+        #    out_dim = in_dim
         super(ResidualBlock, self).__init__()
-        self.conv1 = tf.keras.layers.Conv2D(in_channels=in_dim, out_channels=out_dim, kernel_size=(3, 3), padding=1)
-        self.conv2 = tf.keras.layers.Conv2D(in_channels=out_dim, out_channels=out_dim, kernel_size=(3, 3), padding=1)
+        self.conv1 = tf.keras.layers.Conv2D(out_dim, kernel_size=(3, 3), padding='same')
+        self.conv2 = tf.keras.layers.Conv2D(out_dim, kernel_size=(3, 3), padding='same')
+        self.relu_layer = tf.keras.layers.ReLU()
         self.with_batchnorm = with_batchnorm
         if with_batchnorm:
-            self.bn1 = nn.batch_normalization(out_dim)
-            self.bn2 = nn.batch_normalization(out_dim)
+            self.bn1 = tf.nn.batch_normalization(out_dim)
+            self.bn2 = tf.nn.batch_normalization(out_dim)
         self.with_residual = with_residual
-        if in_dim == out_dim or not with_residual:
+        if not with_residual:
             self.proj = None
         else:
-            self.proj = tf.keras.layers.Conv2D(in_channels=in_dim, out_channels=out_dim, kernel_size=(1, 1))
+            self.proj = tf.keras.layers.Conv2D(out_dim, kernel_size=(1, 1))
 
     def __call__(self, x):
+        #print("x ka shape : ", x.shape)
+        x = tf.transpose(x, perm=[0, 2, 3, 1])
+        #print("x ka shape  after transpose: ", x.shape)
         if self.with_batchnorm:
             out = tf.nn.relu(self.bn1(self.conv1(x)))
             out = self.bn2(self.conv2(out))
+            #print("in if with batchnorm")
         else:
             out = self.conv2(tf.nn.relu(self.conv1(x)))
+            #print("in else with batchnorm")
         res = x if self.proj is None else self.proj(x)
         if self.with_residual:
-            out = tf.nn.relu(res + out)
+            #print(res.shape, out.shape)
+            out = tf.nn.relu(tf.math.add(res, out))
+            #print(res.shape, out.shape)
+            #print("in if with residual")
+            #out = self.relu_layer(res + out)
         else:
             out = tf.nn.relu(out)
+            #print("in else with reidual")
+            #out = self.relu_layer(out)
+        #print("out ka shape : ", out.shape)
+        out = tf.transpose(out, perm=[0, 3, 1, 2])
+        #print("out ka shape  after transpose: ", out.shape)
         return out
 
 
-class GlobalAveragePool(tf.Module):
+class GlobalAveragePool(tf.keras.Model):
     def __call__(self, x):
-        N, C = x.size(0), x.size(1)
-        return x.reshape(N, C, -1).mean(2).squeeze(2)
+        N, C = tf.shape(x)
+        return tf.squeeze(tf.reshape(x, [N, C, -1]).mean(2), [2])
 
 
-class Flatten(tf.Module):
+class Flatten(tf.keras.Model):
     def __call__(self, x):
-        return x.reshape(x.size(0), -1)
+        return tf.reshape(x, [tf.shape(x)[0], -1])

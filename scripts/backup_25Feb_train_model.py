@@ -176,9 +176,10 @@ def batch_creater(data, batch_size, drop_last):
     batch = (q, a, f, ans, pro, l)
     j = 0
     big_batch = []
-    #print("Length of data set : ", len(data))
+    print("Length of data set : ", len(data))
     trimmed_data = len(data)/60
-    #print("trimmed length : ", int(trimmed_data))
+    print("trimmed length : ", int(trimmed_data))
+    # print("Batch Size : ", batch_size)
     for i in range(int(trimmed_data)):
         for k in range(6):
             batch[k].append(data[i][k])
@@ -213,22 +214,14 @@ def train_loop(args, train_loader, val_loader):
 
     pg_best_state, ee_best_state, baseline_best_state = None, None, None
 
-    # pg_checkpoint = ModelCheckpoint(args.checkpoint_path,
-    #                              monitor='val_accuracy',
-    #                              verbose=1,
-    #                              save_best_only=True,
-    #                              mode='min',
-    #                              load_weights_on_restart=True)
-    # ee_checkpoint = ModelCheckpoint(args.checkpoint_path,
-    #                                 monitor='val_accuracy',
-    #                                 verbose=1,
-    #                                 save_best_only=True,
-    #                                 mode='min',
-    #                                 load_weights_on_restart=True)
-    pg_checkpoint_dir = './pg_training_checkpoints'
-    pg_checkpoint_prefix = os.path.join(pg_checkpoint_dir, "ckpt")
-    ee_checkpoint_dir = './ee_training_checkpoints'
-    ee_checkpoint_prefix = os.path.join(ee_checkpoint_dir, "ckpt")
+    checkpoint = ModelCheckpoint(args.checkpoint_path,
+                                 monitor='loss',
+                                 verbose=1,
+                                 save_best_only=True,
+                                 mode='min',
+                                 load_weights_on_restart=True)
+    checkpoint_dir = './training_checkpoints'
+    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
     # Set up model
     if args.model_type == 'PG' or args.model_type == 'PG+EE':
         program_generator, pg_kwargs = get_program_generator(args)
@@ -258,17 +251,24 @@ def train_loop(args, train_loader, val_loader):
     # set_mode('train', [program_generator, execution_engine, baseline_model])
 
     print('train_loader has %d samples' % len(train_loader))
+    # train_loader = train_loader[:256]
+    print('train_loader has %d samples' % len(train_loader))
     print('val_loader has %d samples' % len(val_loader))
-    train_data_load = batch_creater(train_loader, batch_size, False)
-    val_data_load = batch_creater(val_loader, batch_size, False)
-    print("train data load length :", len(train_data_load))
+    # data_sampler = iter(range(len(train_loader)))
+    data_load = batch_creater(train_loader, batch_size, False)
+    print("Data load length :", len(data_load))
+    # print(data_load[0][0])
 
     while t < args.num_iterations:
         total_loss = 0
         epoch += 1
         print('Starting epoch %d' % epoch)
-        #print("value of t :", t)
-        for run_num, batch in enumerate(train_data_load):
+        print("value of t :", t)
+        # train_loader_data = get_data(train_loader)
+        # print("train data loader length :", len(train_loader_data))
+        # print(train_loader[0].shape)
+        # print(train_loader[0])
+        for run_num, batch in enumerate(data_load):
             batch_loss = 0
             t += 1
             questions, _, feats, answers, programs, _ = to_tensor(
@@ -295,86 +295,146 @@ def train_loop(args, train_loader, val_loader):
 
             if args.model_type == 'EE':
                 # Train program generator with ground-truth programs+++
+                #print("Training program generator with ground-truth programs ... ")
+                #print("shape of features before train : ", feats_var.shape)
                 feats = tf.transpose(feats_var, perm=[0, 2, 3, 1])
+                #feats_var.assign(feats)
                 feats_var = tf.Variable(feats)
+                #print("shape of reshaped features before train : ", feats_var.shape)
+                #print("type of feats_var: ", type(feats_var,)," and of program_var :", type(programs_var))
                 with tf.GradientTape() as tape:
                     scores = execution_engine(feats_var, programs_var)
+                    #tape.watch(scores)
+                    #scores = tf.dtypes.cast(scores, dtype=tf.float32)
                     answers_var = tf.dtypes.cast(answers_var, dtype=tf.int32)
+                    #tape.watch(answers_var)
+                #answers_var = answers_var.read_value()
+                #print("Shape of score var and ans_var : ", scores.shape, answers_var.shape)
+                #print("type of score and ans_var : ", type(scores), type(answers_var))
+                    #scores = tf.Variable(scores)
+                    #answers_var = tf.Variable(answers_var)
+                #with tf.GradientTape() as tape2:
+                #batch_loss = loss_function(scores, answers_var)
                     batch_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=scores, labels=answers_var))
-                total_loss += batch_loss
-                grads = tape.gradient(batch_loss, execution_engine.trainable_variables)
-                gradients = [grad if grad is not None else tf.zeros_like(var) for var, grad in zip(execution_engine.trainable_variables, grads)]
-                #TODO Might need some changes for gradients
-
-                ee_optimizer.apply_gradients(zip(gradients, execution_engine.trainable_variables))
-
-            elif args.model_type == 'PG+EE':
-                print("in PG EE -----------------")
-                feats = tf.transpose(feats_var, perm=[0, 2, 3, 1])
-                feats_var = tf.Variable(feats)
-                with tf.GradientTape() as pg_tape, tf.GradientTape() as ee_tape:
-                    programs_pred = program_generator.reinforce_sample(questions_var)
-                    print("shape of programs_pred : ", programs_pred.shape)
-                    scores = execution_engine(feats_var, programs_pred)
-                    answers_var = tf.dtypes.cast(answers_var, dtype=tf.int32)
-                    batch_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=scores, labels=answers_var))
-                    #_, preds = scores.data.max(1)
-                    print("dim of score :", scores.shape)
-                    preds = tf.math.reduce_max(scores, axis=1, keepdims=True)
-                    print("dim of pred :", preds.shape)
-                    # raw_reward = (preds == answers).float()
-                    raw_reward = tf.cast((preds == answers), dtype=tf.float32)
-                    reward_moving_average *= args.reward_decay
-                    reward_moving_average += (1.0 - args.reward_decay) * raw_reward.numpy().mean()
-                    centered_reward = raw_reward - reward_moving_average
-
-                if args.train_execution_engine == 1:
-                    grads = ee_tape.gradient(batch_loss, execution_engine.trainable_variables)
-                    gradients = [grad if grad is not None else tf.zeros_like(var) for var, grad in
-                                 zip(execution_engine.trainable_variables, grads)]
-                    # TODO Might need some changes for gradients
-
+                    #tape.watch(batch_loss)
+                    total_loss += batch_loss
+                    #variables = execution_engine.trainable_variables
+                    #print("length of variables : ", len(variables))
+                #variables = execution_engine.trainable_variables
+                #batch_loss = tf.Variable(batch_loss)
+                    grads = tape.gradient(batch_loss, execution_engine.trainable_variables)
+                    gradients = [grad if grad is not None else tf.zeros_like(var) for var, grad in zip(execution_engine.trainable_variables, grads)]
+                    #TODO Might need some changes
+                    #print("length of gradients : ", len(gradients))
+                    #for i, item in enumerate(gradients):
+                    #    print("gradients #",i," : ", item)
+                    #    if i == 5:
+                    #        break
+                    #print("loss : ", batch_loss)
+                #print("variables : ", variables)
+                #print("gradient :", gradients)
                     ee_optimizer.apply_gradients(zip(gradients, execution_engine.trainable_variables))
+            print(
+                'Epoch {} Batch No. {} Loss {:.4f}'.format(
+                    epoch, run_num, batch_loss.numpy()))
+        if epoch % 2 == 0:
+            checkpoint.save(file_prefix=checkpoint_prefix)
+        if t == args.num_iterations:
+            break
+            # program_generator.compile(optimizer=pg_optimizer, loss=loss)
+            # ques = np.asarray(questions_var.read_value())
+            # prog = np.asarray(programs_var.read_value())
+            # history = program_generator.fit(
+            #     x=ques,
+            #     y=prog,
+            #     batch_size=args.batch_size,
+            #     epochs=10,
+            #     verbose=0,
+            #     callbacks=[LossAndErrorPrintingCallback(), checkpoint])
 
-                if args.train_program_generator == 1:
-                    loss, multinomial_outputs = program_generator.reinforce_backward(centered_reward)
-                    multinomial_outputs = tf.concat(multinomial_outputs, 0)
-                    multinomial_outputs = tf.Variable(multinomial_outputs)
-                    print("multi op shape new : ", multinomial_outputs.shape)
-                    grads = pg_tape.gradient(loss, multinomial_outputs)
-                    pg_optimizer.apply_gradients(grads, multinomial_outputs)
-            print('Epoch {} Batch No. {} Loss {:.4f}'.format(epoch, run_num, batch_loss.numpy()))
+            # elif args.model_type == 'EE':
+            #     # Train execution engine with ground-truth programs
+            #     scores = execution_engine(feats_var, programs_var)
+            #     loss = tf.nn.softmax_cross_entropy_with_logits(
+            #         scores, answers_var)
+            #     execution_engine.compile(optimizer=ee_optimizer, loss=loss)
+            #     history = execution_engine.fit(
+            #         questions_var,
+            #         to_categorical(answers_var),
+            #         batch_size=args.batch_size,
+            #         epochs=10,
+            #         verbose=0,
+            #         callbacks=[LossAndErrorPrintingCallback(), checkpoint])
 
-            # if t == args.num_iterations:
-            #     break
+            # elif args.model_type == 'PG+EE':
+            #     programs_pred = program_generator.reinforce_sample(questions_var)
+            #     scores = execution_engine(feats_var, programs_pred)
+            #
+            #     loss = tf.nn.softmax_cross_entropy_with_logits(scores, answers_var)
+            #     _, preds = scores.data.max(1)
+            #     # raw_reward = (preds == answers).float()
+            #     raw_reward = tf.cast((preds == answers), dtype=tf.float32)
+            #     reward_moving_average *= args.reward_decay
+            #     reward_moving_average += (1.0 - args.reward_decay) * raw_reward.mean()
+            #     centered_reward = raw_reward - reward_moving_average
+            #
+            #     if args.train_execution_engine == 1:
+            #         ee_optimizer.zero_grad()
+            #         loss.backward()
+            #         ee_optimizer.step()
+            #
+            #     if args.train_program_generator == 1:
+            #         pg_optimizer.zero_grad()
+            #         program_generator.reinforce_backward(centered_reward.cuda())
+            #         pg_optimizer.step()
 
-            if t % (args.record_loss_every * 2) == 0:
-                #print(t, batch_loss)
-                stats['train_losses'].append(batch_loss)
-                stats['train_losses_ts'].append(t)
-                if reward is not None:
-                    stats['train_rewards'].append(reward)
-
-            if t % args.checkpoint_every == 0:
-                print('Checking training accuracy ... ')
-                train_acc = check_accuracy(args, program_generator, execution_engine, train_data_load)
-                print('train accuracy is', train_acc)
-                print('Checking validation accuracy ...')
-                val_acc = check_accuracy(args, program_generator, execution_engine, val_data_load)
-                print('val accuracy is ', val_acc)
-                stats['train_accs'].append(train_acc)
-                stats['val_accs'].append(val_acc)
-                stats['val_accs_ts'].append(t)
-
-                if val_acc > stats['best_val_acc']:
-                    stats['best_val_acc'] = val_acc
-                    stats['model_t'] = t
-                    if args.model_type == 'PG':
-                        checkpoint = tf.train.Checkpoint(optimizer=pg_optimizer, model=program_generator)
-                        checkpoint.save(file_prefix=pg_checkpoint_prefix)
-                    if args.model_type == 'EE':
-                        checkpoint = tf.train.Checkpoint(optimizer=ee_optimizer, model=execution_engine)
-                        checkpoint.save(file_prefix=ee_checkpoint_prefix)
+            # if t % args.record_loss_every == 0:
+            #     print(t, loss.data[0])
+            #     stats['train_losses'].append(loss.data[0])
+            #     stats['train_losses_ts'].append(t)
+            #     if reward is not None:
+            #         stats['train_rewards'].append(reward)
+            #
+            # if t % args.checkpoint_every == 0:
+            #     print('Checking training accuracy ... ')
+            #     train_acc = check_accuracy(args, program_generator, execution_engine,
+            #                                baseline_model, train_loader)
+            #     print('train accuracy is', train_acc)
+            #     print('Checking validation accuracy ...')
+            #     val_acc = check_accuracy(args, program_generator, execution_engine,
+            #                              baseline_model, val_loader)
+            #     print('val accuracy is ', val_acc)
+            #     stats['train_accs'].append(train_acc)
+            #     stats['val_accs'].append(val_acc)
+            #     stats['val_accs_ts'].append(t)
+            #
+            #     if val_acc > stats['best_val_acc']:
+            #         stats['best_val_acc'] = val_acc
+            #         stats['model_t'] = t
+            #         best_pg_state = get_state(program_generator)
+            #         best_ee_state = get_state(execution_engine)
+            #         best_baseline_state = get_state(baseline_model)
+            #
+            #     checkpoint = {
+            #         'args': args.__dict__,
+            #         'program_generator_kwargs': pg_kwargs,
+            #         'program_generator_state': best_pg_state,
+            #         'execution_engine_kwargs': ee_kwargs,
+            #         'execution_engine_state': best_ee_state,
+            #         'baseline_kwargs': baseline_kwargs,
+            #         'baseline_state': best_baseline_state,
+            #         'baseline_type': baseline_type,
+            #         'vocab': vocab
+            #     }
+            #     for k, v in stats.items():
+            #         checkpoint[k] = v
+            #     print('Saving checkpoint to %s' % args.checkpoint_path)
+            #     torch.save(checkpoint, args.checkpoint_path)
+            #     del checkpoint['program_generator_state']
+            #     del checkpoint['execution_engine_state']
+            #     del checkpoint['baseline_state']
+            #     with open(args.checkpoint_path + '.json', 'w') as f:
+            #         json.dump(checkpoint, f)
 
         if t == args.num_iterations:
             break
@@ -439,57 +499,54 @@ def set_mode(mode, models):
             m.eval()
 
 
-def check_accuracy(args, program_generator, execution_engine, loader):
-    #set_mode('eval', [program_generator, execution_engine])
+def check_accuracy(
+        args,
+        program_generator,
+        execution_engine,
+        baseline_model,
+        loader):
+    set_mode('eval', [program_generator, execution_engine, baseline_model])
     num_correct, num_samples = 0, 0
-    for run_num, batch in enumerate(loader):
+    for batch in loader:
+        questions, _, feats, answers, programs, _ = batch
 
-        questions, _, feats, answers, programs, _ = to_tensor(
-            batch[0]), batch[1], to_tensor(
-            batch[2]), to_tensor(
-            batch[3]), to_tensor(
-            batch[4]), batch[5]
-
-        questions_var = tf.Variable(questions)
-        feats_var = tf.Variable(feats, trainable=True)
-        answers_var = tf.Variable(answers, trainable=True)
+        questions_var = tf.Variable(questions.cuda(), volatile=True)
+        feats_var = tf.Variable(feats.cuda(), volatile=True)
+        answers_var = tf.Variable(feats.cuda(), volatile=True)
         if programs[0] is not None:
-            programs_var = tf.Variable(programs, trainable=True)
+            programs_var = tf.Variable(programs.cuda(), volatile=True)
 
         scores = None  # Use this for everything but PG
         if args.model_type == 'PG':
             vocab = utils.load_vocab(args.vocab_json)
-            for i in range(tf.shape(questions)[0]):
-                q = tf.Variable(questions[i:i + 1])
-                q = tf.dtypes.cast(q.read_value(), dtype=tf.int32)
-                program_pred = program_generator.sample(tf.Variable(q))
-                #print("program_pred : ", program_pred)
-                program_pred_str = iep.preprocess.decode(program_pred, vocab['program_idx_to_token'])
-                #print("program_pred_str : ", program_pred_str)
-                #print("program__i : ", programs[i])
-                program_str = iep.preprocess.decode(programs[i].numpy(), vocab['program_idx_to_token'])
-                #print("program__str : ", program_str)
+            for i in range(questions.size(0)):
+                program_pred = program_generator.sample(
+                    tf.Variable(questions[i:i + 1].cuda(), volatile=True))
+                program_pred_str = iep.preprocess.decode(
+                    program_pred, vocab['program_idx_to_token'])
+                program_str = iep.preprocess.decode(
+                    programs[i], vocab['program_idx_to_token'])
                 if program_pred_str == program_str:
                     num_correct += 1
                 num_samples += 1
         elif args.model_type == 'EE':
-            feats = tf.transpose(feats_var, perm=[0, 2, 3, 1])
-            feats_var = tf.Variable(feats)
             scores = execution_engine(feats_var, programs_var)
         elif args.model_type == 'PG+EE':
-            programs_pred = program_generator.reinforce_sample(questions_var, argmax=True)
+            programs_pred = program_generator.reinforce_sample(
+                questions_var, argmax=True)
             scores = execution_engine(feats_var, programs_pred)
+        elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
+            scores = baseline_model(questions_var, feats_var)
 
         if scores is not None:
-            #_, preds = scores.max(1)
-            preds = tf.math.argmax(scores, axis=1, output_type=tf.dtypes.int32)
-            #num_correct += (preds == answers).sum()
-            num_correct += (np.where(np.equal(preds.numpy(), answers.numpy()), 1, 0)).sum()
-            num_samples += tf.shape(preds)[0].numpy()
+            _, preds = scores.data.cpu().max(1)
+            num_correct += (preds == answers).sum()
+            num_samples += preds.size(0)
 
         if num_samples >= args.num_val_samples:
             break
 
+    set_mode('train', [program_generator, execution_engine, baseline_model])
     acc = float(num_correct) / num_samples
     return acc
 
